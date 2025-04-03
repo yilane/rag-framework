@@ -106,9 +106,22 @@
                 </div>
               </div>
               
-              <el-button type="primary" style="width: 100%;" @click="handleLoadFile">
+              <el-button type="primary" style="width: 100%;" @click="handleLoadFile" :loading="loading">
                 加载文档
               </el-button>
+
+              <!-- 状态提示 -->
+              <div v-if="loadingStatus" :class="[
+                'loading-status',
+                {
+                  'success': loadingStatus.includes('成功'),
+                  'error': loadingStatus.includes('错误'),
+                  'info': loadingStatus.includes('正在'),
+                  'warning': loadingStatus.includes('警告')
+                }
+              ]">
+                {{ loadingStatus }}
+              </div>
             </div>
           </div>
         </el-card>
@@ -437,7 +450,7 @@ const handleFileChange = (file) => {
 // 修改文件加载方法，对接真实API
 const handleLoadFile = async () => {
   if (!selectedFile.value) {
-    ElMessage.warning('请先选择文件')
+    loadingStatus.value = '错误: 请先选择文件'
     return
   }
   
@@ -458,6 +471,9 @@ const handleLoadFile = async () => {
       formData.append('strategy', unstructuredStrategy.value)
       formData.append('chunking_strategy', chunkingStrategy.value)
       formData.append('chunking_options', JSON.stringify(chunkingOptions.value))
+      loadingStatus.value = '正在使用 Unstructured 处理文档...'
+    } else {
+      loadingStatus.value = `正在使用 ${loadingMethod.value} 处理文档...`
     }
     
     // 使用封装的upload方法
@@ -467,7 +483,7 @@ const handleLoadFile = async () => {
     // 直接使用API返回的数据结构
     loadedContent.value = result
     
-    ElMessage.success('文档加载成功')
+    loadingStatus.value = '文档加载成功'
     
     // 刷新文档列表
     fetchDocuments()
@@ -475,13 +491,20 @@ const handleLoadFile = async () => {
     // 切换到预览标签
     activeTab.value = 'preview'
     
+    // 3秒后清除成功状态
+    setTimeout(() => {
+      if (loadingStatus.value === '文档加载成功') {
+        loadingStatus.value = ''
+      }
+    }, 3000)
+    
   } catch (error) {
     console.error('加载文档出错:', error)
+    loadingStatus.value = `错误: ${error.message || '文档加载失败'}`
     ElMessage.error('文档加载失败: ' + (error.message || '未知错误'))
     loadedContent.value = null
   } finally {
     loading.value = false
-    loadingStatus.value = ''
   }
 }
 
@@ -846,6 +869,39 @@ const hasChunks = computed(() => {
     max-height: 250px;
     overflow-x: hidden !important;
   }
+}
+
+/* 加载状态提示样式 */
+.loading-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.loading-status.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.loading-status.error {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
+}
+
+.loading-status.info {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #e0f2fe;
+}
+
+.loading-status.warning {
+  background-color: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
 }
 </style>
 

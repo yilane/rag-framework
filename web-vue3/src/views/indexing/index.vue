@@ -71,9 +71,9 @@
             </div>
 
             <!-- 状态信息 -->
-            <div v-if="progressStatus" style="margin-top: 16px; padding: 12px; border-radius: 4px; font-size: 14px;"
-              :class="progressStatus.includes('错误') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
-              {{ progressStatus }}
+            <div v-if="indexStatus" style="margin-top: 16px; padding: 12px; border-radius: 4px; font-size: 14px;"
+              :class="indexStatus.includes('错误') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+              {{ indexStatus }}
             </div>
           </div>
         </el-card>
@@ -164,22 +164,6 @@
         </el-card>
       </div>
     </div>
-
-    <!-- 进度对话框 -->
-    <el-dialog v-model="progressVisible" title="索引构建进度" width="500px" :close-on-click-modal="false"
-      :close-on-press-escape="false">
-      <el-progress :percentage="progress"
-        :status="progressStatus.includes('错误') ? 'exception' : progressStatus === 'success' ? 'success' : ''"
-        :stroke-width="15" />
-      <div style="margin-top: 16px; text-align: center; color: #909399;">
-        {{ progressText }}
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="handleCancel">取消</el-button>
-        </span>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -234,14 +218,15 @@ const availableIndexModes = computed(() => {
 
 // 状态变量
 const loading = ref(false)
+const processingIndex = ref(false)
+const indexStatus = ref('')
+const loadedDocuments = ref([])
 const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const progressVisible = ref(false)
-const progress = ref(0)
-const progressStatus = ref('')
-const progressText = ref('')
+const activeTab = ref('preview')
+const previewUrl = ref('')
 
 // 索引配置
 const indexConfig = ref({
@@ -342,7 +327,7 @@ const getStatusText = (status) => {
 
 // 获取嵌入文件列表
 const fetchEmbeddedFiles = async () => {
-  loading.value = true
+  
   try {
     const response = await axios.get(`${apiBaseUrl}/list-embedded`)
     if (response.data && Array.isArray(response.data.documents)) {
@@ -357,15 +342,13 @@ const fetchEmbeddedFiles = async () => {
     }
   } catch (error) {
     console.error('获取嵌入文件列表失败:', error)
-    progressStatus.value = '错误: 加载嵌入文件失败'
+    indexStatus.value = '错误: 加载嵌入文件失败'
   } finally {
-    loading.value = false
   }
 }
 
 // 获取集合列表
 const fetchCollections = async () => {
-  loading.value = true
   try {
     const response = await axios.get(`${apiBaseUrl}/collections/${selectedProvider.value}`)
     if (response.data && response.data.collections) {
@@ -376,7 +359,6 @@ const fetchCollections = async () => {
   } catch (error) {
     console.error('获取集合列表失败:', error)
   } finally {
-    loading.value = false
   }
 }
 
@@ -412,63 +394,76 @@ const handleProviderChange = async (newProvider) => {
 // 开始索引处理
 const handleStartIndexing = async () => {
   if (!embeddingFile.value) {
-    ElMessage.warning('请先选择嵌入文件')
+    indexStatus.value = '错误: 请先选择一个嵌入文件'
     return
   }
 
-  // 显示进度对话框
   loading.value = true
-  progressVisible.value = true
-  progress.value = 0
-  progressStatus.value = ''
-  progressText.value = '正在构建索引...'
+  processingIndex.value = true
+  indexStatus.value = '正在处理中...'
 
   try {
-    // 调用索引构建API
-    const response = await axios.post(`${apiBaseUrl}/index`, {
-      fileId: embeddingFile.value,
-      vectorDb: selectedProvider.value,
-      indexMode: indexConfig.value.indexType,
-      metric: indexConfig.value.metric,
-      batchSize: indexConfig.value.batchSize,
-      concurrency: indexConfig.value.concurrency
-    })
-
-    // 索引构建完成，直接使用返回的结果
-    indexingResult.value = {
-      database: response.data.database,
-      collection_name: response.data.collection_name,
-      total_vectors: response.data.total_vectors,
-      index_size: formatSize(response.data.index_size),
-      index_mode: response.data.index_mode,
-      processing_time: response.data.processing_time,
-      created_at: new Date().toISOString() // 使用当前时间作为创建时间
+    // 构建请求参数
+    const params = {
+      fileId: embeddingFile.value,  // 使用文件ID
+      vectorDb: selectedProvider.value,  // 向量数据库提供商
+      indexMode: indexConfig.value.indexType  // 索引模式
     }
 
-    // 更新UI状态
-    progress.value = 100
-    progressStatus.value = 'success'
-    progressText.value = '索引构建完成'
-    previewContent.value = true
+    console.log('索引处理参数:', params)
 
-    // 显示成功消息
-    ElMessage.success('索引构建完成')
+    // 发送索引处理请求
+    const url = `${apiBaseUrl}/index`
+    const response = await axios.post(url, params, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 60000
+    })
+
+    console.log('索引处理响应:', response.data)
+
+    // 等待1秒，让后端有时间处理完成
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // 处理完成后的操作
+    indexStatus.value = '索引处理完成'
+
+    // 3秒后清除成功状态
+    setTimeout(() => {
+      if (indexStatus.value === '索引处理完成') {
+        indexStatus.value = ''
+      }
+    }, 3000)
+
+    // 显示处理结果
+    ElMessage.success('文档索引处理完成')
+    loading.value = false
 
     // 刷新集合列表
     await fetchCollections()
 
-    // 延迟关闭进度对话框
-    setTimeout(() => {
-      progressVisible.value = false
-      loading.value = false
-    }, 1000)
+    // 切换到预览模式并显示索引结果
+    if (response.data) {
+      indexingResult.value = {
+        database: selectedProvider.value,
+        collection_name: response.data.collection_name,
+        total_vectors: response.data.total_vectors,
+        index_size: formatSize(response.data.index_size || 0),
+        index_mode: response.data.index_mode,
+        processing_time: response.data.processing_time,
+        created_at: new Date().toISOString()
+      }
+      previewContent.value = true
+    }
 
   } catch (error) {
-    console.error('索引构建失败:', error)
-    progressStatus.value = '错误: ' + (error.response?.data?.message || error.message || '索引构建失败')
     loading.value = false
-    progressVisible.value = false
-    ElMessage.error(error.response?.data?.message || error.message || '索引构建失败')
+    console.error('索引处理失败:', error)
+    indexStatus.value = `错误: 索引处理失败 - ${error.response?.data?.detail || error.message || '未知错误'}`
+    ElMessage.error(`索引处理失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+  } finally {
+    processingIndex.value = false
   }
 }
 
@@ -479,7 +474,6 @@ const handleDisplayCollection = async () => {
     return
   }
 
-  loading.value = true
   try {
     const response = await axios.get(`${apiBaseUrl}/collections/${selectedProvider.value}/${selectedCollection.value}`)
     const data = response.data
@@ -501,10 +495,10 @@ const handleDisplayCollection = async () => {
     ElMessage.success('已加载集合信息')
   } catch (error) {
     console.error('获取集合详情失败:', error)
-    progressStatus.value = '错误: ' + (error.response?.data?.message || error.message || '获取集合详情失败')
+    indexStatus.value = '错误: ' + (error.response?.data?.message || error.message || '获取集合详情失败')
     ElMessage.error(error.response?.data?.message || error.message || '获取集合详情失败')
   } finally {
-    loading.value = false
+    
   }
 }
 
@@ -525,7 +519,6 @@ const handleDeleteCollection = () => {
       confirmButtonClass: 'el-button--danger'
     }
   ).then(async () => {
-    loading.value = true
     try {
       await axios.delete(`${apiBaseUrl}/collections/${selectedProvider.value}/${selectedCollection.value}`)
       selectedCollection.value = ''
@@ -535,32 +528,12 @@ const handleDeleteCollection = () => {
       ElMessage.success('集合已删除')
     } catch (error) {
       console.error('删除集合失败:', error)
-      progressStatus.value = '错误: ' + (error.response?.data?.message || error.message || '删除集合失败')
+      indexStatus.value = '错误: ' + (error.response?.data?.message || error.message || '删除集合失败')
       ElMessage.error(error.response?.data?.message || error.message || '删除集合失败')
     } finally {
-      loading.value = false
+      
     }
   }).catch(() => { })
-}
-
-// 取消索引构建
-const handleCancel = () => {
-  ElMessageBox.confirm(
-    '确定要取消索引构建过程吗？',
-    '警告',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }
-  ).then(() => {
-    progressVisible.value = false
-    progress.value = 0
-    progressStatus.value = ''
-    progressText.value = ''
-    loading.value = false
-    ElMessage.info('已取消索引构建过程')
-  }).catch(() => {})
 }
 
 // 格式化文件大小

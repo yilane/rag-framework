@@ -75,9 +75,16 @@
                 </el-button>
               </div>
               
-              <div v-if="chunkStatus" style="margin-top: 16px; padding: 12px; border-radius: 4px; font-size: 14px;"
-                :class="chunkStatus.includes('错误') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'"
-              >
+              <!-- 状态提示 -->
+              <div v-if="chunkStatus" :class="[
+                'chunk-status',
+                {
+                  'success': chunkStatus.includes('完成'),
+                  'error': chunkStatus.includes('错误'),
+                  'info': chunkStatus.includes('处理中'),
+                  'warning': chunkStatus.includes('警告')
+                }
+              ]">
                 {{ chunkStatus }}
               </div>
             </div>
@@ -252,13 +259,6 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="uploadTime" label="创建时间" width="180" align="center" />
-                <el-table-column label="状态" width="100" align="center">
-                  <template #default="{ row }">
-                    <el-tag :type="getStatusType(row.status)" size="small">
-                      {{ getStatusText(row.status) }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
                 <el-table-column label="操作" width="120" align="center">
                   <template #default="{ row }">
                     <el-button link type="primary" @click="handlePreview(row)">预览</el-button>
@@ -290,29 +290,6 @@
       </div>
     </div>
 
-    <!-- 处理进度对话框 -->
-    <el-dialog
-      v-model="progressVisible"
-      title="处理进度"
-      width="500px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-    >
-      <el-progress 
-        :percentage="progress" 
-        :status="progressStatus"
-        :stroke-width="15"
-      />
-      <div style="margin-top: 16px; text-align: center; color: #909399;">
-        {{ progressText }}
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="handleCancel">取消</el-button>
-        </span>
-      </template>
-    </el-dialog>
-
     <!-- 预览失败时的错误提示 -->
     <div v-if="previewError" class="absolute top-0 left-0 right-0 flex justify-center" style="z-index: 10;">
       <div class="bg-red-50 text-red-500 px-4 py-2 rounded-md flex items-center mt-2">
@@ -340,10 +317,6 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
-const progressVisible = ref(false)
-const progress = ref(0)
-const progressStatus = ref('')
-const progressText = ref('')
 const activeTab = ref('preview')
 const previewUrl = ref('')
 const loadedContent = ref(null)
@@ -431,37 +404,20 @@ const getModeName = (mode) => {
   const modes = {
     paragraph: '按段落',
     sentence: '按句子',
-    fixed: '固定大小'
+    fixed: '固定大小',
+    by_pages: '按页分块',
+    by_paragraphs: '按段落',
+    by_sentences: '按句子',
+    fixed_size: '固定大小'
   }
   return modes[mode] || mode
 }
 
-// 方法
-const getStatusType = (status) => {
-  const types = {
-    pending: 'info',
-    processing: 'warning',
-    completed: 'success',
-    failed: 'danger'
-  }
-  return types[status] || 'info'
-}
-
-const getStatusText = (status) => {
-  const texts = {
-    pending: '待处理',
-    processing: '处理中',
-    completed: '已完成',
-    failed: '失败'
-  }
-  return texts[status] || '未知'
-}
-
 const handleCancel = () => {
-  progressVisible.value = false
-  progress.value = 0
-  progressStatus.value = ''
-  progressText.value = ''
+  // progressVisible.value = false
+  // progress.value = 0
+  // progressStatus.value = ''
+  // progressText.value = ''
 }
 
 // 获取已加载的文档列表
@@ -635,34 +591,26 @@ const handleStartChunk = async () => {
   
   processingChunk.value = true
   chunkStatus.value = '正在处理中...'
-  
-  // 显示进度对话框
-  progressVisible.value = true
-  progress.value = 0
-  progressStatus.value = ''
-  progressText.value = '正在处理文件...'
+  // progress.value = 0
+  // progressStatus.value = ''
+  // progressText.value = '正在处理文件...'
   
   try {
     // 确保docId使用正确的格式
     const selectedDoc = loadedDocuments.value.find(doc => doc.id === chunkConfig.value.selectedDoc)
     if (!selectedDoc) {
+      processingChunk.value = false
       throw new Error('找不到选中的文档')
     }
     
-    // 重要：使用ID字段，而不是name
     const docId = selectedDoc.id
     
-    // 记录调试信息
-    console.log('选中的文档:', selectedDoc)
-    console.log('处理的文档ID:', docId)
-    
-    // 构建请求参数 - 不要去除.json后缀，保持原始ID格式
+    // 构建请求参数
     const params = {
       doc_id: docId,
       chunking_option: chunkConfig.value.mode
     }
     
-    // 对于固定大小模式，添加chunk_size和overlap_size
     if (chunkConfig.value.mode === 'fixed_size') {
       params.chunk_size = chunkConfig.value.chunkSize || 1000
       params.overlap_size = chunkConfig.value.overlapSize || 0
@@ -671,53 +619,41 @@ const handleStartChunk = async () => {
     console.log('分块处理参数:', params)
     
     // 发送分块处理请求
-    progress.value = 10
-    progressText.value = '正在向服务器发送请求...'
+    // progress.value = 10
+    // progressText.value = '正在向服务器发送请求...'
     
-    // 尝试使用新版API URL
     const url = `${apiBaseUrl}/chunk`
-    console.log('API请求URL:', url)
-    console.log('请求头:', { 'Content-Type': 'application/json' })
-    console.log('请求体:', JSON.stringify(params))
-    
     const response = await axios.post(url, params, {
       headers: {
         'Content-Type': 'application/json'
       },
-      timeout: 60000 // 增加超时时间到60秒
+      timeout: 60000
     })
     
     console.log('分块处理响应:', response.data)
     
     // 更新进度
-    progress.value = 90
-    progressText.value = '文档分块完成，正在获取分块结果...'
+    // progress.value = 90
+    // progressText.value = '文档分块完成，正在获取分块结果...'
     
     // 等待1秒，让后端有时间处理完成
     await new Promise(resolve => setTimeout(resolve, 1000))
     
     // 设置完成状态
-    progress.value = 100
-    progressStatus.value = 'success'
-    progressText.value = '处理完成'
+    // progress.value = 100
+    // progressStatus.value = 'success'
+    // progressText.value = '处理完成'
     
     // 处理完成后的操作
     setTimeout(() => {
-      progressVisible.value = false
+      // progress.value = 0 // 隐藏进度条
       
-      // 尝试使用响应中的output_file，如果有的话
       if (response.data && response.data.output_file) {
-        const outputFile = response.data.output_file
-        console.log('服务器返回的输出文件:', outputFile)
-        handlePreviewById(outputFile)
+        handlePreviewById(response.data.output_file)
       } else if (response.data && response.data.chunked_doc_id) {
-        // 尝试使用chunked_doc_id
-        console.log('服务器返回的分块文档ID:', response.data.chunked_doc_id)
         handlePreviewById(response.data.chunked_doc_id)
       } else {
-        // 使用原始ID加上分块方法作为后缀进行猜测
         const guessedFile = `${docId.replace('.json', '')}_${chunkConfig.value.mode}.json`
-        console.log('猜测的输出文件:', guessedFile)
         handlePreviewById(guessedFile)
       }
       
@@ -725,6 +661,7 @@ const handleStartChunk = async () => {
       fetchChunkedDocuments()
       
       chunkStatus.value = '分块处理完成'
+      processingChunk.value = false
       if (response.data && response.data.total_chunks) {
         ElMessage.success(`文档分块处理成功，共${response.data.total_chunks}个分块`)
       } else {
@@ -734,35 +671,12 @@ const handleStartChunk = async () => {
     
     logApiCall('POST', url, params, response.data)
   } catch (error) {
+    processingChunk.value = false
     console.error('分块处理失败:', error)
     
-    // 详细记录错误
-    if (error.response) {
-      console.error(`HTTP错误 ${error.response.status}: ${JSON.stringify(error.response.data || {})}`)
-      console.error('错误详情:', error.response)
-      
-      // 如果后端返回的是404 Document not found
-      if (error.response.status === 500 && error.response.data?.detail?.includes('Document not found')) {
-        // 可能是ID格式问题，尝试不同格式
-        progressText.value = '错误: 找不到指定的文档，可能是ID格式不正确'
-        console.error('文档未找到，可能是ID格式问题')
-      } else {
-        progressText.value = `错误: ${error.response.status} - ${error.response.data?.detail || '服务器内部错误'}`
-      }
-    } else if (error.request) {
-      console.error('请求发送但未收到响应', error.request)
-      progressText.value = '错误: 服务器未响应请求，请检查API服务是否运行'
-    } else {
-      console.error('请求配置错误', error.message)
-      progressText.value = `错误: ${error.message || '未知错误'}`
-    }
-    
-    progress.value = 0
-    progressStatus.value = 'exception'
-    
-    setTimeout(() => {
-      progressVisible.value = false
-    }, 5000)
+    // progress.value = 0
+    // progressStatus.value = 'exception'
+    // progressText.value = error.response?.data?.detail || error.message || '未知错误'
     
     chunkStatus.value = `错误: 分块处理失败 - ${error.response?.data?.detail || error.message || '未知错误'}`
     ElMessage.error(`分块处理失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
@@ -772,7 +686,7 @@ const handleStartChunk = async () => {
       chunking_option: chunkConfig.value.mode
     } : {}, null, error)
   } finally {
-    processingChunk.value = false
+    // processingChunk.value = false
   }
 }
 
@@ -1163,6 +1077,54 @@ watch(() => chunkConfig.value.mode, (newMode) => {
     max-height: 250px;
     overflow-x: hidden !important;
   }
+}
+
+.bg-red-100 {
+  background-color: #fef2f2;
+}
+
+.bg-green-100 {
+  background-color: #f0fdf4;
+}
+
+.text-red-700 {
+  color: #dc2626;
+}
+
+.text-green-700 {
+  color: #15803d;
+}
+
+.chunk-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.chunk-status.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.chunk-status.error {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
+}
+
+.chunk-status.info {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #e0f2fe;
+}
+
+.chunk-status.warning {
+  background-color: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
 }
 </style>
 

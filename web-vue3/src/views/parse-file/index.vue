@@ -48,8 +48,16 @@
                 </el-button>
               </div>
 
-              <div v-if="parseStatus" style="margin-top: 16px; padding: 12px; border-radius: 4px; font-size: 14px;"
-                :class="parseStatus.includes('错误') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'">
+              <!-- 状态提示 -->
+              <div v-if="parseStatus" :class="[
+                'parse-status',
+                {
+                  'success': parseStatus.includes('完成'),
+                  'error': parseStatus.includes('错误'),
+                  'info': parseStatus.includes('处理中'),
+                  'warning': parseStatus.includes('警告')
+                }
+              ]">
                 {{ parseStatus }}
               </div>
             </div>
@@ -201,20 +209,6 @@
       </div>
     </div>
 
-    <!-- 进度对话框 -->
-    <el-dialog v-model="progressVisible" title="解析进度" width="500px" :close-on-click-modal="false"
-      :close-on-press-escape="false">
-      <el-progress :percentage="progress" :status="progressStatus" :stroke-width="15" />
-      <div style="margin-top: 16px; text-align: center; color: #909399;">
-        {{ progressText }}
-      </div>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="handleCancel">取消</el-button>
-        </span>
-      </template>
-    </el-dialog>
-
     <!-- 预览失败时的错误提示 -->
     <div v-if="previewError" class="absolute top-0 left-0 right-0 flex justify-center" style="z-index: 10;">
       <div class="bg-red-50 text-red-500 px-4 py-2 rounded-md flex items-center mt-2">
@@ -237,10 +231,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiUrls, apiBaseUrl } from '@/config/api'
 
 // 状态变量
-const progressVisible = ref(false)
-const progress = ref(0)
-const progressStatus = ref('')
-const progressText = ref('')
 const processingParse = ref(false)
 const parseStatus = ref('')
 const parsedContent = ref(null)
@@ -288,12 +278,6 @@ const handleStartParse = async () => {
   parsedContent.value = null
   isLoading.value = true
   
-  // 显示进度对话框
-  progressVisible.value = true
-  progress.value = 0
-  progressStatus.value = ''
-  progressText.value = '正在解析文件...'
-  
   try {
     // 构建FormData对象
     const formData = new FormData()
@@ -301,17 +285,12 @@ const handleStartParse = async () => {
     formData.append('loading_method', loadingMethod.value)
     formData.append('parsing_option', parsingOption.value)
     
-    // 模拟进度动画
-    const progressTimer = startProgressAnimation()
-    
     // 发送API请求
     try {
       const response = await fetch(`${apiBaseUrl}/parse`, {
         method: 'POST',
         body: formData
       })
-      
-      clearInterval(progressTimer)
       
       if (!response.ok) {
         const errorText = await response.text()
@@ -322,7 +301,6 @@ const handleStartParse = async () => {
             errorMessage = errorJson.message
           }
         } catch (e) {
-          // 如果响应不是JSON格式，使用默认错误信息
           console.error('解析错误响应失败:', e)
         }
         throw new Error(errorMessage)
@@ -333,13 +311,11 @@ const handleStartParse = async () => {
       
       // 处理不同API响应结构
       if (data.parsed_content) {
-        // 适配ParseFile.jsx中使用的数据结构
         parsedContent.value = {
           metadata: data.parsed_content.metadata || {},
           content: data.parsed_content.content || []
         }
       } else {
-        // 直接使用返回的数据结构
         parsedContent.value = data
       }
       
@@ -351,7 +327,7 @@ const handleStartParse = async () => {
       // 处理内容数据，确保每项都有页码
       parsedContent.value.content = parsedContent.value.content.map(item => {
         if (!item.page && item.page !== 0) {
-          item.page = 1 // 默认页码
+          item.page = 1
         }
         return item
       })
@@ -359,74 +335,31 @@ const handleStartParse = async () => {
       // 按页码排序内容
       parsedContent.value.content.sort((a, b) => a.page - b.page)
       
-      // 完成进度
-      progress.value = 100
-      progressStatus.value = 'success'
-      progressText.value = '解析完成'
+      parseStatus.value = '解析处理完成'
+      processingParse.value = false
+      isLoading.value = false
       
+      // 3秒后清除成功状态
       setTimeout(() => {
-        progressVisible.value = false
-        parseStatus.value = '解析处理完成'
-        processingParse.value = false
-        isLoading.value = false
-        
-        // 显示解析结果统计
-        const contentCount = parsedContent.value.content.length
-        const pageCount = parsedContent.value.metadata?.total_pages || '未知'
-        
-        ElMessage({
-          message: `文件解析完成，共 ${contentCount} 个内容项，${pageCount} 页`,
-          type: 'success',
-          duration: 3000
-        })
-      }, 1000)
+        if (parseStatus.value === '解析处理完成') {
+          parseStatus.value = ''
+        }
+      }, 3000)
+      
     } catch (error) {
-      clearInterval(progressTimer)
       console.error('解析错误:', error)
-      
-      progressStatus.value = 'exception'
-      progressText.value = `错误: ${error.message}`
-      
-      setTimeout(() => {
-        progressVisible.value = false
-      }, 2000)
-      
       parseStatus.value = `错误: ${error.message}`
       processingParse.value = false
       isLoading.value = false
       previewError.value = true
       previewErrorMessage.value = `解析失败: ${error.message}`
-      ElMessage.error(`解析失败: ${error.message}`)
     }
   } catch (error) {
     console.error('处理错误:', error)
     parseStatus.value = `错误: ${error.message}`
     processingParse.value = false
-    progressVisible.value = false
     isLoading.value = false
   }
-}
-
-// 启动进度动画
-const startProgressAnimation = () => {
-  return setInterval(() => {
-    if (progress.value < 90) {
-      progress.value += 5
-      
-      // 更新进度文本
-      if (progress.value < 20) {
-        progressText.value = '正在加载文件...'
-      } else if (progress.value < 40) {
-        progressText.value = '正在提取文本内容...'
-      } else if (progress.value < 60) {
-        progressText.value = '正在分析文档结构...'
-      } else if (progress.value < 80) {
-        progressText.value = '正在处理数据...'
-      } else {
-        progressText.value = '即将完成...'
-      }
-    }
-  }, 200)
 }
 
 // 获取内容类型文本
@@ -483,10 +416,6 @@ const handleCancel = () => {
       type: 'warning'
     }
   ).then(() => {
-    progressVisible.value = false
-    progress.value = 0
-    progressStatus.value = ''
-    progressText.value = ''
     parseStatus.value = '解析已取消'
     processingParse.value = false
     ElMessage.info('已取消解析过程')
@@ -998,6 +927,39 @@ onMounted(() => {
 
 .list-content {
   line-height: 1.6;
+}
+
+/* 解析状态提示样式 */
+.parse-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.parse-status.success {
+  background-color: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #dcfce7;
+}
+
+.parse-status.error {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fee2e2;
+}
+
+.parse-status.info {
+  background-color: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #e0f2fe;
+}
+
+.parse-status.warning {
+  background-color: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
 }
 </style>
 

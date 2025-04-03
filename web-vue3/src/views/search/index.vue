@@ -93,7 +93,6 @@
             <div style="margin-top: 8px;">
               <el-button
                 type="primary"
-                :icon="Search"
                 style="width: 100%;"
                 @click="handleSearch"
                 :loading="searching"
@@ -331,6 +330,14 @@ const handleSearch = async () => {
       } else {
         status.value = '搜索完成！'
       }
+
+      // 3秒后清除成功状态
+      setTimeout(() => {
+        if (status.value === '搜索完成！') {
+          status.value = ''
+        }
+      }, 3000)
+
     } else {
       searchResults.value = []
       status.value = '没有找到相关结果，请尝试调整搜索条件'

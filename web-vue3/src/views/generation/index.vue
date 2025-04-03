@@ -84,11 +84,14 @@
                 {{ generating ? '生成中...' : '生成' }}
               </el-button>
 
-              <!-- 状态消息 -->
-              <div v-if="status" :class="[
-                'p-4 rounded-lg',
-                status.includes('失败') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-              ]">
+              <!-- 状态信息 -->
+              <div v-if="status" 
+                class="status-message"
+                :class="{
+                  'error': status.includes('错误') || status.includes('失败'),
+                  'success': status.includes('完成') || status.includes('成功'),
+                  'info': !status.includes('错误') && !status.includes('失败') && !status.includes('完成') && !status.includes('成功')
+                }">
                 {{ status }}
               </div>
             </template>
@@ -299,5 +302,32 @@ const handleGenerate = async () => {
 
 :deep(.el-select) {
   width: 100%;
+}
+
+/* 状态信息样式 */
+.status-message {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.status-message.success {
+  background-color: #f0f9eb;
+  border: 1px solid #e1f3d8;
+  color: #67c23a;
+}
+
+.status-message.error {
+  background-color: #fef0f0;
+  border: 1px solid #fde2e2;
+  color: #f56c6c;
+}
+
+.status-message.info {
+  background-color: #f4f4f5;
+  border: 1px solid #e9e9eb;
+  color: #909399;
 }
 </style> 
