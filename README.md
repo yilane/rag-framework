@@ -119,13 +119,10 @@ DEEPSEEK_API_KEY=your_deepseek_api_key_here
 
 #### 4. 启动后端
 
-上述开发环境安装完成后，使用`uvicorn`启动后端
+上述开发环境安装完成后，使用start_server.py启动后端服务
 
 ```shell
-# 进入后端代码目录
-cd backend/
-# 启动
-uvicorn main:app --reload --port 8001 --host 0.0.0.0
+python backend/start_server.py
 ```
 
 *(请确保您的后端主文件是 `main.py` 并且 FastAPI 应用实例名为 `app`。如果端口 `8001` 被占用，请更换为其他可用端口。)*
