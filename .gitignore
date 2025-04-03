@@ -171,3 +171,4 @@ cython_debug/
 
 # 忽略所有 .vscode 目录
 .vscode/
+backend/nohup.out

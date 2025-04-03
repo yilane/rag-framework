@@ -126,8 +126,25 @@ DEEPSEEK_API_KEY=your_deepseek_api_key_here
 # 进入后端项目目录
 cd backend
 
-# 启动后端服务
-python start_server.py
+# 后端服务相关命令
+
+# 普通启动（前台运行）
+python start_server.py start
+
+# 后台运行
+python start_server.py start -d
+
+# 禁用自动重载启动
+python start_server.py start --no-reload
+
+# 后台运行且禁用自动重载
+python start_server.py start -d --no-reload
+
+# 停止服务
+python start_server.py stop
+
+# 重启服务
+python start_server.py reload
 ```
 
 *(请确保您的后端主文件是 `main.py` 并且 FastAPI 应用实例名为 `app`。如果端口 `8001` 被占用，可通过.env配置文件更换为其他可用端口。)*

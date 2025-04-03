@@ -352,41 +352,7 @@ const chunkingOptions = [
 ]
 
 // 模拟数据
-const files = ref([
-  {
-    id: 1,
-    name: '产品说明书.pdf',
-    type: 'PDF',
-    size: '2.5MB',
-    pages: 15,
-    chunks: 8,
-    mode: 'paragraph',
-    uploadTime: '2024-04-02 10:00:00',
-    status: 'completed'
-  },
-  {
-    id: 2,
-    name: '技术文档.docx',
-    type: 'Word',
-    size: '1.8MB',
-    pages: 20,
-    chunks: 12,
-    mode: 'sentence',
-    uploadTime: '2024-04-02 09:30:00',
-    status: 'processing'
-  },
-  {
-    id: 3,
-    name: '用户手册.pdf',
-    type: 'PDF',
-    size: '3.2MB',
-    pages: 8,
-    chunks: 5,
-    mode: 'fixed',
-    uploadTime: '2024-04-02 08:15:00',
-    status: 'pending'
-  }
-])
+const files = ref([])
 
 // 更新总数
 total.value = files.value.length

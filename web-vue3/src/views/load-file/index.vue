@@ -371,44 +371,7 @@ const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(3)
-const fileList = ref([
-  {
-    id: 1,
-    name: '产品说明书.pdf',
-    pages: '15',
-    chunks: '11',
-    loadingMethod: 'pymupdf',
-    chunkingMethod: 'loaded',
-    type: 'PDF',
-    size: '2.5MB',
-    uploadTime: '2024-04-02 10:00:00',
-    status: '成功'
-  },
-  {
-    id: 2,
-    name: '技术文档.docx',
-    pages: '20',
-    chunks: '15',
-    loadingMethod: 'unstructured',
-    chunkingMethod: 'basic',
-    type: 'Word',
-    size: '1.8MB',
-    uploadTime: '2024-04-02 09:30:00',
-    status: '处理中'
-  },
-  {
-    id: 3,
-    name: '用户手册.pdf',
-    pages: '8',
-    chunks: '5',
-    loadingMethod: 'pymupdf',
-    chunkingMethod: 'loaded',
-    type: 'PDF',
-    size: '3.2MB',
-    uploadTime: '2024-04-02 08:15:00',
-    status: '成功'
-  }
-])
+const fileList = ref([])
 
 const filteredFiles = computed(() => {
   return fileList.value.filter(file => 
