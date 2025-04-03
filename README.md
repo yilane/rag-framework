@@ -250,29 +250,35 @@ web-vue3/
    - 解决：使用 Python 3.10 版本，并确保正确安装 requirements.txt 中的依赖
    - 建议：使用虚拟环境隔离项目依赖
 
-2. **API Key 配置问题**
-   - 问题：调用第三方 API 失败，提示认证错误
-   - 解决：检查环境变量中的 API Key 配置
-   ```bash
-   export OPENAI_API_KEY="your_key_here"
-   export DEEPSEEK_API_KEY="your_key_here"
-   ```
-   - 建议：将 API Key 配置添加到 `~/.bashrc` 或 `~/.zshrc`
+2. **API Key 未配置错误**
+   - 错误信息：`OpenAI API key not provided` 或 `Deepseek API key not provided`
+   - 解决方案：检查 `.env` 文件中是否正确配置了对应的 API Key
 
-3. **端口占用问题**
+3. **API Key 无效错误**
+   - 错误信息：`Invalid API key` 或 `Authentication failed`
+   - 解决方案：
+     - 确认 API Key 是否正确复制，没有多余的空格
+     - 检查 API Key 是否仍然有效
+     - 确认是否有足够的额度
+
+4. **找不到 .env 文件错误**
+   - 错误信息：`Could not find .env file`
+   - 解决方案：确保在 `backend` 目录下创建了 `.env` 文件 
+
+5. **端口占用问题**
    - 问题：启动服务时提示端口被占用
    - 解决：修改启动命令中的端口号
-   ```bash
-   uvicorn main:app --reload --port 8002 --host 0.0.0.0
-   ```
+      ```bash
+      uvicorn main:app --reload --port 8002 --host 0.0.0.0
+      ```
    - 建议：使用 `lsof -i :端口号` 检查端口占用情况
 
-4. **文件权限问题**
+6. **文件权限问题**
    - 问题：无法读写文件，Permission denied
    - 解决：检查文件和目录权限
-   ```bash
-   chmod -R 755 项目目录
-   ```
+      ```bash
+      chmod -R 755 项目目录
+      ```
    - 建议：确保运行服务的用户有适当的文件权限
 
 ### 数据处理相关

@@ -6,8 +6,7 @@ __pycache__/
 *$py.class
 
 *.db
-frontend/node_modules/
-logs/
+node_modules
 
 # C extensions
 *.so
