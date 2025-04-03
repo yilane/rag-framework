@@ -78,8 +78,8 @@ npm run dev --mode production
 
 本项目使用 Python v3.10 开发，完整 Python 依赖软件包见requirements_ubun.txt 和 requirements_win.txt。
 
-- Windows 环境： [requirements_win.txt]()
-- Ubuntu 环境： [requirements_ubun.txt]()
+- Windows 环境： [requirements_win.txt](https://github.com/yline007/ragdev-project/blob/main/requirements_win.txt)
+- Ubuntu 环境： [requirements_ubun.txt](https://github.com/yline007/ragdev-project/blob/main/requirements_ubun.txt)
 
 关键依赖的官方文档如下：
 
