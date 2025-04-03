@@ -106,7 +106,13 @@
                 </div>
               </div>
               
-              <el-button type="primary" style="width: 100%;" @click="handleLoadFile" :loading="loading">
+              <el-button 
+                type="primary" 
+                style="width: 100%;" 
+                @click="handleLoadFile" 
+                :loading="loading"
+                :disabled="!selectedFile"
+              >
                 加载文档
               </el-button>
 
