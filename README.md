@@ -97,6 +97,7 @@ rm -rf ~/miniconda3/miniconda.sh
 安装完成后，建议新建一个 Python 虚拟环境，命名为 `rag-project`。
 
 ```shell
+# 创建虚拟环境
 conda create -n rag-project python=3.11
 
 # 激活环境
@@ -122,49 +123,23 @@ DEEPSEEK_API_KEY=your_deepseek_api_key_here
 上述开发环境安装完成后，使用start_server.py启动后端服务
 
 ```shell
-python backend/start_server.py
+# 进入后端项目目录
+cd backend
+
+# 启动后端服务
+python start_server.py
 ```
 
-*(请确保您的后端主文件是 `main.py` 并且 FastAPI 应用实例名为 `app`。如果端口 `8001` 被占用，请更换为其他可用端口。)*
-
-这条命令是使用 Uvicorn 运行一个 ASGI (Asynchronous Server Gateway Interface) 应用程序的指令。让我们分解一下它的各个部分：
-
-- **`uvicorn`**: 这是 Uvicorn 的命令行接口。Uvicorn 是一个闪电般快速的 ASGI 服务器，基于 uvloop 和 httptools 构建。它主要用于运行现代 Python Web 框架，如 FastAPI 和 Starlette。
-
-- **`main:app`**: 这部分指定了要运行的 ASGI 应用程序的位置。
-
-  - **`main`**: 这通常指的是一个名为 `main.py` 的 Python 文件（模块）。
-
-  - `app`: 这指的是在 `main.py` 文件中定义的一个名为 `app`的变量。这个变量应该是一个 ASGI 应用程序实例。例如，如果你在使用 FastAPI，你可能会在  `main.py` 中有类似这样的代码：
-
-    ```python
-    from fastapi import FastAPI
-    
-    app = FastAPI()
-    
-    @app.get("/")
-    async def read_root():
-        return {"Hello": "World"}
-    ```
-
-- **`--reload`**: 这是一个非常有用的开发选项。当使用这个标志时，Uvicorn 会监视你的应用程序代码文件的更改。一旦检测到任何更改，它会自动重新启动服务器。这使得在开发过程中可以快速迭代，而无需手动停止和启动服务器。
-
-- **`--port 8001`**: 这个选项指定了 Uvicorn 服务器应该监听的网络端口。在这里，服务器将被配置为在 `8001` 端口上接收传入的 HTTP 请求。如果不指定端口，Uvicorn 默认会使用 `8000` 端口。
-
-**总而言之，这条命令的作用是：**
-
-启动 Uvicorn ASGI 服务器，加载 `main.py` 文件中名为 `app` 的 ASGI 应用程序。服务器将在 `8001` 端口上监听传入的请求，并且在应用程序代码发生更改时自动重新加载。
-
-这通常是在开发基于 ASGI 框架（如 FastAPI 或 Starlette）构建的 Web 应用程序时启动服务器的标准命令。
+*(请确保您的后端主文件是 `main.py` 并且 FastAPI 应用实例名为 `app`。如果端口 `8001` 被占用，可通过.env配置文件更换为其他可用端口。)*
 
 
 ## 技术架构
 
 ### 技术栈
-- 后端：Python FastAPI
+- 后端框架：Python FastAPI
 - 向量数据库：Milvus、Chroma
-- 前端：Vue3 + Vite
-- 后端：Python 
+- 前端技术栈：Vue3 + Vite
+- 后端语言：Python 
 
 ## 项目架构 
 
@@ -298,10 +273,10 @@ web-vue3/
 ### 监控和日志
 
 1. **日志记录**
-   - 建议开启详细日志记录，便于问题排查
-   ```bash
-   uvicorn main:app --reload --log-level debug
-   ```
+   - 建议开启详细日志记录，便于问题排查，配置.env文件
+      ```bash
+      DEBUG=True
+      ```
 
 2. **性能监控**
    - 建议使用监控工具跟踪服务性能

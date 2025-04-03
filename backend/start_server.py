@@ -7,7 +7,7 @@ def main():
     host = config.HOST
     port = config.PORT
     
-    # 构建uvicorn命令
+    # 构建基本命令
     command = [
         'uvicorn',
         'main:app',
@@ -16,7 +16,12 @@ def main():
         f'--port={port}'
     ]
     
-    print(f'正在启动服务器 - Host: {host}, Port: {port}')
+    # 如果DEBUG为True，添加debug日志级别
+    if config.DEBUG:
+        command.append('--log-level=debug')
+        print(f'正在启动服务器 - Host: {host}, Port: {port}, Debug模式')
+    else:
+        print(f'正在启动服务器 - Host: {host}, Port: {port}')
     
     # 执行命令
     try:
