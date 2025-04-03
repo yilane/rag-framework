@@ -109,13 +109,12 @@ conda activate rag-project
 pip install -r requirements_ubun.txt
 ```
 
-#### 3. 配置 OpenAI API Key
-
-根据你使用的命令行工具，在 `~/.bashrc` 或 `~/.zshrc` 中配置 `OPENAI_API_KEY` 环境变量：
+#### 3. 配置 Model API Key
+在项目根目录下创建 `.env` 文件，配置相关的 API Key。您可以参考 `.env.example` 文件进行配置：
 
 ```shell
-export OPENAI_API_KEY="xxxx"
-export DEEPSEEK_API_KEY="xxxx"
+OPENAI_API_KEY=your_openai_api_key_here
+DEEPSEEK_API_KEY=your_deepseek_api_key_here
 ```
 
 #### 4. 启动后端

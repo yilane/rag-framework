@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 from openai import OpenAI
 import requests
+from utils.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +134,7 @@ class GenerationService:
         """
         try:
             if not api_key:
-                api_key = os.getenv("OPENAI_API_KEY")
+                api_key = api_key or config.OPENAI_API_KEY
                 if not api_key:
                     raise ValueError("OpenAI API key not provided")
                     
@@ -180,7 +181,7 @@ class GenerationService:
         """
         try:
             if not api_key:
-                api_key = os.getenv("DEEPSEEK_API_KEY")
+                api_key = api_key or config.OPENAI_API_KEY
                 if not api_key:
                     raise ValueError("DeepSeek API key not provided")
                     
@@ -251,8 +252,14 @@ class GenerationService:
             if provider == "huggingface":
                 response = self._generate_with_huggingface(model_name, query, context)
             elif provider == "openai":
+                api_key = api_key or config.OPENAI_API_KEY
+                if not api_key:
+                    raise ValueError("OpenAI API key is required")
                 response = self._generate_with_openai(model_name, query, context, api_key)
             elif provider == "deepseek":
+                api_key = api_key or config.DEEPSEEK_API_KEY
+                if not api_key:
+                    raise ValueError("Deepseek API key is required")
                 response = self._generate_with_deepseek(model_name, query, context, api_key, show_reasoning)
             else:
                 raise ValueError(f"Unsupported provider: {provider}")

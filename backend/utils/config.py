@@ -1,7 +1,13 @@
+import os
 from enum import Enum
-from typing import Dict, Any
+from pathlib import Path
+from dotenv import load_dotenv
 
-class VectorDBProvider(str, Enum):
+# 加载环境变量
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+class VectorDBProvider(Enum):
     MILVUS = "milvus"
     CHROMA = "chroma"
     # More providers can be added later
@@ -45,6 +51,24 @@ class VectorDBProvider(str, Enum):
         return cls.MILVUS
 
 # 可以在这里添加其他配置相关的内容
+
+class Config:
+    # API Keys
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+
+    # Server Settings
+    HOST = os.getenv("HOST", "0.0.0.0")
+    PORT = int(os.getenv("PORT", "8001"))
+    DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+
+    # Logging Settings
+    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+    LOG_DIR = os.getenv("LOG_DIR", "logs")
+    LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "30"))
+
+# 创建全局配置实例
+config = Config()
 
 MILVUS_CONFIG = {
     "uri": "03-vector-store/langchain_milvus.db",
