@@ -221,7 +221,8 @@ const modelOptionsMap = {
     { label: 'sentence-transformers/all-mpnet-base-v2', value: 'sentence-transformers/all-mpnet-base-v2' },
     { label: 'all-MiniLM-L6-v2', value: 'all-MiniLM-L6-v2' },
     { label: 'google-bert/bert-base-uncased', value: 'google-bert/bert-base-uncased' },
-    { label: 'BAAI/bge-small-zh-v1.5', value: 'BAAI/bge-small-zh-v1.5' }
+    { label: 'BAAI/bge-small-zh-v1.5', value: 'BAAI/bge-small-zh-v1.5' },
+    { label: 'intfloat/multilingual-e5-large-instruct', value: 'intfloat/multilingual-e5-large-instruct' }
   ],
   openai: [
     { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },

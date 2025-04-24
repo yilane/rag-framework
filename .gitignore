@@ -173,3 +173,5 @@ cython_debug/
 .vscode/
 backend/nohup.out
 backend/server.pid
+
+logs
