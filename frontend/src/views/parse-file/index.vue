@@ -10,34 +10,34 @@
             <div>
               <!-- 添加文件选择 -->
               <div>
-                <div style="margin-bottom: 8px; font-size: 14px;">上传 PDF</div>
-                <el-upload class="upload-demo" action="#" :auto-upload="false" :on-change="handleFileChange"
-                  accept=".pdf,.doc,.docx,.txt">
+                <div style="margin-bottom: 8px; font-size: 14px;">上传文档</div>
+                <el-upload 
+                  class="upload-demo" 
+                  action="#" 
+                  :auto-upload="false" 
+                  :on-change="handleFileChange"
+                  :before-upload="checkFileType"
+                  accept=".pdf,.md,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp">
                   <el-button type="primary">选择文件</el-button>
+                  <template #tip>
+                    <div class="el-upload__tip">
+                      支持的文件类型：PDF、Markdown、Word、文本文件、图片
+                    </div>
+                  </template>
                 </el-upload>
                 <div style="margin-top: 8px; color: #909399;" v-if="!selectedFile">未选择任何文件</div>
                 <div style="margin-top: 8px; color: #606266;" v-else>已选择: {{ selectedFile.name }}</div>
-              </div>
-
-              <!-- 加载工具选择 -->
-              <div style="margin-top: 16px;">
-                <div style="margin-bottom: 8px; font-size: 14px;">加载工具</div>
-                <el-select v-model="loadingMethod" style="width: 100%;">
-                  <el-option label="PyMuPDF" value="pymupdf" />
-                  <el-option label="PyPDF" value="pypdf" />
-                  <el-option label="Unstructured" value="unstructured" />
-                  <el-option label="PDF Plumber" value="pdfplumber" />
-                </el-select>
               </div>
 
               <!-- 解析选项 -->
               <div style="margin-top: 16px;">
                 <div style="margin-bottom: 8px; font-size: 14px;">解析选项</div>
                 <el-select v-model="parsingOption" style="width: 100%;">
-                  <el-option label="全部文本" value="all_text" />
-                  <el-option label="按页解析" value="by_pages" />
-                  <el-option label="按标题解析" value="by_titles" />
-                  <el-option label="文本和表格" value="text_and_tables" />
+                  <el-option label="简单文本" value="all_in_one" />
+                  <el-option label="结构化解析" value="structured" />
+                  <el-option label="提取表格" value="with_tables" />
+                  <el-option label="提取图像" value="with_images" />
+                  <el-option label="完整解析(表格+图像)" value="with_tables_and_images" />
                 </el-select>
               </div>
 
@@ -160,6 +160,11 @@
                       </ul>
                       <div v-else v-html="formatListContent(item.content)"></div>
                     </div>
+                    <div v-else-if="item.type === 'image_text'" class="image-content">
+                      <div class="image-text-heading">图像内容识别</div>
+                      <div class="image-text-content">{{ item.content }}</div>
+                      <div v-if="item.metadata" class="image-metadata">{{ item.metadata }}</div>
+                    </div>
                     <div v-else class="text-content">
                       {{ item.content }}
                     </div>
@@ -237,8 +242,7 @@ const parsedContent = ref(null)
 const previewError = ref(false)
 const previewErrorMessage = ref('获取预览内容失败')
 const selectedFile = ref(null)
-const loadingMethod = ref('pymupdf')
-const parsingOption = ref('all_text')
+const parsingOption = ref('all_in_one')
 const docName = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -265,6 +269,62 @@ const handleFileChange = (file) => {
   }
 }
 
+// 检查文件类型
+const checkFileType = (file) => {
+  // 获取文件扩展名（全部转为小写）
+  const extension = file.name.split('.').pop().toLowerCase()
+  
+  // 支持的文件类型列表
+  const supportedTypes = {
+    'pdf': '文档',
+    'md': 'Markdown',
+    'doc': 'Word',
+    'docx': 'Word',
+    'txt': '文本',
+    'jpg': '图片',
+    'jpeg': '图片',
+    'png': '图片',
+    'bmp': '图片',
+    'tiff': '图片',
+    'tif': '图片'
+  }
+  
+  // 判断是否为支持的文件类型
+  if (!supportedTypes[extension]) {
+    ElMessage.error(`不支持的文件类型：${extension}，请上传PDF、Markdown、Word、文本或图片文件`)
+    return false
+  }
+  
+  // 根据文件类型自动调整解析选项
+  if (extension === 'pdf' || extension === 'doc' || extension === 'docx') {
+    // 文档类型默认完整解析
+    parsingOption.value = 'with_tables_and_images'
+  } else if (extension === 'md' || extension === 'txt') {
+    // 纯文本类型默认结构化解析
+    parsingOption.value = 'structured'
+  } else if (['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif'].includes(extension)) {
+    // 图片类型默认图像提取
+    parsingOption.value = 'with_images'
+  }
+  
+  // 更新状态信息
+  parseStatus.value = `已选择${supportedTypes[extension]}文件，推荐使用${getParsingOptionText(parsingOption.value)}解析`
+  
+  return true
+}
+
+// 获取解析选项的文本描述
+const getParsingOptionText = (option) => {
+  const optionMap = {
+    'all_in_one': '简单文本',
+    'structured': '结构化解析',
+    'with_tables': '提取表格',
+    'with_images': '提取图像',
+    'with_tables_and_images': '完整解析'
+  }
+  return optionMap[option] || option
+}
+
 // 解析方法
 const handleStartParse = async () => {
   if (!selectedFile.value) {
@@ -282,7 +342,6 @@ const handleStartParse = async () => {
     // 构建FormData对象
     const formData = new FormData()
     formData.append('file', selectedFile.value)
-    formData.append('loading_method', loadingMethod.value)
     formData.append('parsing_option', parsingOption.value)
     
     // 发送API请求
@@ -364,18 +423,17 @@ const handleStartParse = async () => {
 
 // 获取内容类型文本
 const getContentTypeText = (type) => {
-  const types = {
-    'title': '标题',
+  const typeMap = {
     'text': '文本',
+    'heading': '标题',
     'table': '表格',
-    'image': '图片',
+    'image': '图像',
+    'image_text': '图像文本',
     'list': '列表',
     'code': '代码',
-    'equation': '公式',
-    'citation': '引用',
-    'footnote': '脚注'
+    'error': '错误'
   }
-  return types[type] || type
+  return typeMap[type] || type
 }
 
 // 处理分页逻辑
@@ -402,7 +460,8 @@ const handlePageChange = (page) => {
 // 获取置信度状态
 const getConfidenceStatus = (confidence) => {
   if (confidence >= 0.8) return 'success'
-  if (confidence >= 0.5) return 'warning'
+  if (confidence >= 0.6) return ''
+  if (confidence >= 0.4) return 'warning'
   return 'exception'
 }
 
@@ -424,42 +483,39 @@ const handleCancel = () => {
 
 // 格式化表格内容
 const formatTableContent = (content) => {
-  if (!content) return '';
-  
-  // 检查是否已经是HTML格式
-  if (content.startsWith('<table')) {
+  // 如果已经是HTML
+  if (content.startsWith('<table') || content.includes('<table')) {
     return content;
   }
   
-  // 处理Markdown风格的表格
+  // 将Markdown表格转换为HTML
   if (content.includes('|')) {
+    let html = '<table class="md-table">';
     const rows = content.trim().split('\n');
-    let html = '<table class="parsed-table">';
     
-    rows.forEach((row, rowIndex) => {
-      // 跳过分隔行 (----)
-      if (row.trim().replace(/[\-\|]/g, '') === '') {
-        return;
-      }
+    rows.forEach((row, index) => {
+      // 跳过分隔行
+      if (row.replace(/[\|\-\s]/g, '') === '') return;
       
-      const cells = row.split('|').filter(cell => cell.trim() !== '');
+      const isHeader = index === 0;
+      const cells = row.split('|').slice(1, -1); // 去掉首尾的 |
       
-      if (cells.length > 0) {
-        html += '<tr>';
-        cells.forEach(cell => {
-          const tag = rowIndex === 0 ? 'th' : 'td';
-          html += `<${tag}>${cell.trim()}</${tag}>`;
-        });
-        html += '</tr>';
-      }
+      html += '<tr>';
+      cells.forEach(cell => {
+        if (isHeader) {
+          html += `<th>${cell.trim()}</th>`;
+        } else {
+          html += `<td>${cell.trim()}</td>`;
+        }
+      });
+      html += '</tr>';
     });
     
     html += '</table>';
     return html;
   }
   
-  // 纯文本，按行分割
-  return content.replace(/\n/g, '<br>');
+  return `<pre>${content}</pre>`;
 }
 
 // 格式化数字(添加千位分隔符)
@@ -525,31 +581,28 @@ const handleExportResult = () => {
 
 // 格式化列表内容
 const formatListContent = (content) => {
-  if (!content) return '';
-  
-  // 检查是否已经是HTML格式
-  if (content.startsWith('<ul') || content.startsWith('<ol')) {
+  // 检测是否已包含HTML列表标记
+  if (content.includes('<ul>') || content.includes('<ol>')) {
     return content;
   }
   
-  // 处理纯文本列表
-  if (typeof content === 'string' && content.includes('\n')) {
-    const items = content.split('\n').filter(item => item.trim() !== '');
-    let html = '<ul class="parsed-list">';
-    
-    items.forEach(item => {
-      // 去除常见的列表标记
-      const cleanItem = item.replace(/^[\s•\-\*\d+\.]+/, '').trim();
-      if (cleanItem) {
-        html += `<li>${cleanItem}</li>`;
-      }
-    });
-    
-    html += '</ul>';
-    return html;
-  }
+  // 尝试转换普通文本为列表
+  const lines = content.split('\n');
+  let html = '<ul>';
   
-  return content;
+  lines.forEach(line => {
+    line = line.trim();
+    if (line) {
+      // 检测常见的列表项标记，如 - * •
+      if (line.match(/^[\-\*\•\d+\.\s]+/)) {
+        line = line.replace(/^[\-\*\•\d+\.\s]+/, '');
+      }
+      html += `<li>${line}</li>`;
+    }
+  });
+  
+  html += '</ul>';
+  return html;
 }
 
 // 复制内容到剪贴板
@@ -932,34 +985,195 @@ onMounted(() => {
 /* 解析状态提示样式 */
 .parse-status {
   margin-top: 16px;
-  padding: 12px;
+  padding: 8px 12px;
   border-radius: 4px;
   font-size: 14px;
-  transition: all 0.3s ease;
 }
 
-.parse-status.success {
-  background-color: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #dcfce7;
+.success {
+  background-color: #f0f9eb;
+  color: #67c23a;
+  border: 1px solid #e1f3d8;
 }
 
-.parse-status.error {
-  background-color: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fee2e2;
+.error {
+  background-color: #fef0f0;
+  color: #f56c6c;
+  border: 1px solid #fde2e2;
 }
 
-.parse-status.info {
-  background-color: #f0f9ff;
-  color: #0369a1;
-  border: 1px solid #e0f2fe;
+.info {
+  background-color: #f4f4f5;
+  color: #909399;
+  border: 1px solid #e9e9eb;
 }
 
-.parse-status.warning {
-  background-color: #fffbeb;
-  color: #d97706;
-  border: 1px solid #fef3c7;
+.warning {
+  background-color: #fdf6ec;
+  color: #e6a23c;
+  border: 1px solid #faecd8;
+}
+
+.doc-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-gap: 8px;
+}
+
+.doc-info-item {
+  display: flex;
+  font-size: 13px;
+}
+
+.info-label {
+  color: #909399;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #606266;
+  word-break: break-all;
+}
+
+.content-block {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  position: relative;
+  background-color: #fff;
+  border: 1px solid #ebeef5;
+}
+
+.type-indicator {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #ebeef5;
+}
+
+.type-table {
+  color: #409eff;
+}
+
+.type-image, .type-image_text {
+  color: #67c23a;
+}
+
+.type-heading {
+  color: #e6a23c;
+}
+
+.content-title {
+  font-weight: bold;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.content-metadata {
+  float: right;
+  font-style: italic;
+  color: #c0c4cc;
+}
+
+.table-content {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.image-content {
+  margin: 12px 0;
+}
+
+.image-text-heading {
+  font-weight: 500;
+  color: #67c23a;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.image-text-content {
+  line-height: 1.5;
+  white-space: pre-wrap;
+  background-color: #f8f8f8;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.image-metadata {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.doc-image {
+  max-width: 100%;
+  max-height: 300px;
+  margin: 8px 0;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+}
+
+.code-content {
+  margin: 8px 0;
+}
+
+.code-block {
+  background-color: #f5f7fa;
+  padding: 12px;
+  border-radius: 4px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.list-content ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.confidence-indicator {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.confidence-label {
+  margin-right: 8px;
+  font-size: 12px;
+  color: #909399;
+  width: 60px;
+}
+
+.confidence-bar {
+  flex: 1;
+}
+
+.action-buttons {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: #909399;
+  margin-top: 4px;
 }
 </style>
 

@@ -13,7 +13,6 @@ from fastapi import (
     Depends,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from services.loading_service import LoadingService
 from services.chunking_service import ChunkingService
 from services.embedding_service import EmbeddingService, EmbeddingConfig
 from services.vector_store_service import VectorStoreService, VectorDBConfig
@@ -27,6 +26,7 @@ from pathlib import Path
 from services.generation_service import GenerationService
 from typing import List, Dict, Optional
 from utils.logger import logger
+from fastapi.responses import JSONResponse
 
 # 设置日志
 os.makedirs("logs", exist_ok=True)
@@ -611,43 +611,48 @@ async def delete_embedded_doc(doc_name: str):
 @app.post("/parse")
 async def parse_file(
     file: UploadFile = File(...),
-    loading_method: str = Form(...),
     parsing_option: str = Form(...),
 ):
     try:
-        # Save uploaded file
+        # 创建临时目录，如果不存在
+        os.makedirs("temp", exist_ok=True)
+        
+        # 保存上传的文件
         temp_path = os.path.join("temp", file.filename)
         with open(temp_path, "wb") as buffer:
             content = await file.read()
             buffer.write(content)
 
-        # Prepare metadata
+        # 准备元数据
         metadata = {
             "filename": file.filename,
-            "loading_method": loading_method,
-            "original_file_size": len(content),
+            "filetype": os.path.splitext(file.filename)[1].lower(),
+            "filesize": len(content),
             "processing_date": datetime.now().isoformat(),
-            "parsing_method": parsing_option,
         }
 
-        loading_service = LoadingService()
-        raw_text = loading_service.load_pdf(temp_path, loading_method)
-        metadata["total_pages"] = loading_service.get_total_pages()
-
-        page_map = loading_service.get_page_map()
-
+        # 使用新的ParsingService直接解析文档
         parsing_service = ParsingService()
-        parsed_content = parsing_service.parse_pdf(
-            raw_text, parsing_option, metadata, page_map=page_map
+        parsed_content = parsing_service.parse_document(
+            file_path=temp_path,
+            method=parsing_option,
+            metadata=metadata
         )
 
-        # Clean up temp file
+        # 清理临时文件
         os.remove(temp_path)
 
-        return {"parsed_content": parsed_content}
+        return parsed_content
     except Exception as e:
         logger.error(f"Error parsing file: {str(e)}")
-        raise
+        # 记录详细错误信息，便于调试
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"文件解析失败: {str(e)}"
+        )
 
 
 @app.post("/load")
