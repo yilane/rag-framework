@@ -23,7 +23,7 @@
 你可以通过克隆此仓库到你的本地机器来开始：
 
 ```shell
-git clone https://github.com/yline007/ragdev-project.git
+git clone https://github.com/yilane/ragdev-project.git
 ```
 
 然后导航至目录，并按照部署前端或后端的指示开始操作。
