@@ -171,15 +171,22 @@ async def embed_document(data: dict = Body(...)):
         if not all([doc_id, provider, model]):
             raise HTTPException(status_code=400, detail="Missing required parameters")
 
-        # 直接使用完整文件名查找
+        # 查找文档路径，增加对parsed-docs的支持
         loaded_path = os.path.join("01-loaded-docs", doc_id)
         chunked_path = os.path.join("01-chunked-docs", doc_id)
+        parsed_path = os.path.join("01-parsed-docs", doc_id)
 
         doc_path = None
+        doc_type = None
         if os.path.exists(loaded_path):
             doc_path = loaded_path
+            doc_type = "loaded"
         elif os.path.exists(chunked_path):
             doc_path = chunked_path
+            doc_type = "chunked"
+        elif os.path.exists(parsed_path):
+            doc_path = parsed_path
+            doc_type = "parsed"
 
         if not doc_path:
             raise HTTPException(status_code=404, detail=f"Document not found: {doc_id}")
@@ -191,17 +198,58 @@ async def embed_document(data: dict = Body(...)):
         config = EmbeddingConfig(provider=provider, model_name=model)
         embedding_service = EmbeddingService()
 
-        # 准备输入数据
-        input_data = {
-            "chunks": doc_data["chunks"],
-            "metadata": {
-                "filename": doc_data["filename"],
-                "total_chunks": doc_data["total_chunks"],
-                "total_pages": doc_data["total_pages"],
-                "loading_method": doc_data["loading_method"],
-                "chunking_method": doc_data["chunking_method"],
-            },
-        }
+        # 根据文档类型准备不同的输入数据
+        if doc_type == "parsed":
+            # 解析文档格式处理
+            chunks = []
+            for idx, item in enumerate(doc_data.get("content", [])):
+                # 跳过没有内容的项
+                if not item.get("content"):
+                    continue
+                
+                chunk = {
+                    "content": item.get("content", ""),
+                    "metadata": {
+                        "chunk_id": idx + 1,
+                        "page_number": item.get("page", 1), 
+                        "page_range": str(item.get("page", 1)),
+                        "word_count": len(item.get("content", "").split()) if item.get("content") else 0
+                    }
+                }
+                chunks.append(chunk)
+            
+            # 如果没有有效的内容块，抛出异常
+            if not chunks:
+                raise HTTPException(status_code=400, detail="No valid content found in the document")
+                
+            # 计算文档的总页数（取最大页码）
+            max_page = 1
+            for item in doc_data.get("content", []):
+                if item.get("page", 1) > max_page:
+                    max_page = item.get("page", 1)
+            
+            input_data = {
+                "chunks": chunks,
+                "metadata": {
+                    "filename": doc_data.get("metadata", {}).get("filename", doc_id),
+                    "total_chunks": len(chunks),
+                    "total_pages": max_page,
+                    "loading_method": "unstructured",
+                    "chunking_method": doc_data.get("metadata", {}).get("parsing_method", "parsed"),
+                }
+            }
+        else:
+            # 已加载和已分块文档的原有处理方式
+            input_data = {
+                "chunks": doc_data["chunks"],
+                "metadata": {
+                    "filename": doc_data["filename"],
+                    "total_chunks": doc_data["total_chunks"],
+                    "total_pages": doc_data["total_pages"],
+                    "loading_method": doc_data.get("loading_method", "unknown"),
+                    "chunking_method": doc_data.get("chunking_method", "unknown"),
+                },
+            }
 
         # 创建嵌入 - 只接收两个返回值
         embeddings, _ = embedding_service.create_embeddings(input_data, config)
@@ -240,6 +288,8 @@ async def list_embedded_docs():
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
+                        # 获取时间戳，用于排序
+                        timestamp = data.get("created_at", "")
                         # 使用实际的文件名，而不是文档名
                         doc_info = {
                             "name": filename,  # 保持原始文件名
@@ -249,14 +299,23 @@ async def list_embedded_docs():
                                 "embedding_provider": data.get(
                                     "embedding_provider", ""
                                 ),
-                                "embedding_timestamp": data.get("created_at", ""),
+                                "embedding_timestamp": timestamp,
                                 "vector_dimension": data.get("vector_dimension", 0),
                             },
+                            "_timestamp_for_sorting": timestamp,  # 添加用于排序的隐藏字段
                         }
                         logger.info(f"Added document info: {doc_info}")
                         documents.append(doc_info)
                 except Exception as e:
                     logger.error(f"Error reading file {file_path}: {str(e)}")
+
+        # 按时间戳倒序排序（最新的排在前面）
+        documents.sort(key=lambda x: x.get("_timestamp_for_sorting", ""), reverse=True)
+        
+        # 移除用于排序的临时字段
+        for doc in documents:
+            if "_timestamp_for_sorting" in doc:
+                del doc["_timestamp_for_sorting"]
 
         logger.info(f"Total documents found: {len(documents)}")
         return {"documents": documents}
@@ -452,14 +511,11 @@ async def get_documents(type: str = Query("all")):
                                     "metadata": {
                                         "total_pages": doc_data.get("total_pages"),
                                         "total_chunks": doc_data.get("total_chunks"),
-                                        "loading_method": doc_data.get(
-                                            "loading_method"
-                                        ),
-                                        "chunking_method": doc_data.get(
-                                            "chunking_method"
-                                        ),
+                                        "loading_method": doc_data.get("loading_method"),
+                                        "chunking_method": doc_data.get("chunking_method"),
                                         "timestamp": doc_data.get("timestamp"),
                                     },
+                                    "_timestamp_for_sorting": doc_data.get("timestamp", ""),  # 添加排序字段
                                 }
                             )
 
@@ -477,7 +533,15 @@ async def get_documents(type: str = Query("all")):
                                     "id": filename,
                                     "name": filename,  # 保持原始文件名
                                     "type": "chunked",
-                                }
+                                    "metadata": {
+                                        "total_pages": doc_data.get("total_pages"),
+                                        "total_chunks": doc_data.get("total_chunks"),
+                                        "loading_method": doc_data.get("loading_method"),
+                                        "chunking_method": doc_data.get("chunking_method"),
+                                        "timestamp": doc_data.get("timestamp"),
+                                    },
+                                    "_timestamp_for_sorting": doc_data.get("timestamp", ""),  # 添加排序字段
+                                },
                             )
 
         # 读取parsed文档
@@ -490,6 +554,7 @@ async def get_documents(type: str = Query("all")):
                         with open(file_path, "r", encoding="utf-8") as f:
                             doc_data = json.load(f)
                             metadata = doc_data.get("metadata", {})
+                            timestamp = metadata.get("timestamp", "")
                             documents.append(
                                 {
                                     "id": filename,
@@ -501,10 +566,19 @@ async def get_documents(type: str = Query("all")):
                                         "filesize": metadata.get("filesize"),
                                         "total_elements": metadata.get("total_elements"),
                                         "parsing_method": metadata.get("parsing_method"),
-                                        "timestamp": metadata.get("timestamp"),
+                                        "timestamp": timestamp,
                                     },
+                                    "_timestamp_for_sorting": timestamp,  # 添加排序字段
                                 }
                             )
+        
+        # 按时间戳倒序排序（最新的排在前面）
+        documents.sort(key=lambda x: x.get("_timestamp_for_sorting", ""), reverse=True)
+        
+        # 移除用于排序的临时字段
+        for doc in documents:
+            if "_timestamp_for_sorting" in doc:
+                del doc["_timestamp_for_sorting"]
                             
         return {"documents": documents}
     except Exception as e:
