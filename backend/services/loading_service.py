@@ -36,7 +36,12 @@ class LoadingService:
     def __init__(self):
         self.total_pages = 0
         self.current_page_map = []
-    
+        
+        # 是否禁用unstructured功能，如果遇到一致性问题可以设置为True
+        self.disable_unstructured = os.environ.get("DISABLE_UNSTRUCTURED", "false").lower() == "true"
+        if self.disable_unstructured:
+            logger.warning("unstructured功能已被禁用，将使用备用加载方法")
+            
     def load_pdf(self, file_path: str, method: str, strategy: str = None, chunking_strategy: str = None, chunking_options: dict = None) -> str:
         """
         加载PDF文档的主方法，支持多种加载策略。
@@ -59,12 +64,22 @@ class LoadingService:
             elif method == "pdfplumber":
                 return self._load_with_pdfplumber(file_path)
             elif method == "unstructured":
-                return self._load_with_unstructured(
-                    file_path, 
-                    strategy=strategy,
-                    chunking_strategy=chunking_strategy,
-                    chunking_options=chunking_options
-                )
+                # 如果unstructured被禁用，使用备用方法
+                if self.disable_unstructured:
+                    logger.info("unstructured已被禁用，使用备用方法pypdf")
+                    return self._load_with_pypdf(file_path)
+                    
+                try:
+                    return self._load_with_unstructured(
+                        file_path, 
+                        strategy=strategy,
+                        chunking_strategy=chunking_strategy,
+                        chunking_options=chunking_options
+                    )
+                except Exception as e:
+                    logger.error(f"使用unstructured加载失败: {str(e)}")
+                    logger.info("尝试使用备用方法pypdf")
+                    return self._load_with_pypdf(file_path)
             else:
                 raise ValueError(f"Unsupported loading method: {method}")
         except Exception as e:
@@ -160,7 +175,34 @@ class LoadingService:
         返回:
             str: 提取的文本内容
         """
+        # 设置OCR代理为新的推荐方式
+        os.environ["OCR_AGENT"] = "pytesseract"
+        # 禁止从huggingface下载模型，避免SSL错误
+        os.environ["UNSTRUCTURED_NO_DOWNLOAD_MODELS"] = "true"
+        # 禁用下载YOLO模型
+        os.environ["UNSTRUCTURED_LAYOUT_MODEL_ENABLED"] = "false"
+        # 解决Pydantic模型命名空间警告
+        import warnings
+        warnings.filterwarnings("ignore", message="Field .* has conflict with protected namespace.*")
+        
         try:
+            # 记录unstructured库版本以便调试
+            try:
+                import unstructured
+                logger.info(f"Unstructured library version: {unstructured.__version__}")
+                
+                # 尝试设置Pydantic模型配置（适用于较新版本的unstructured库）
+                try:
+                    from unstructured.documents.elements import Element
+                    if hasattr(Element, 'model_config') and isinstance(Element.model_config, dict):
+                        Element.model_config['protected_namespaces'] = ()
+                        logger.info("已禁用Pydantic模型保护命名空间")
+                except (ImportError, AttributeError) as e:
+                    logger.debug(f"无法设置模型配置: {str(e)}")
+                    
+            except (ImportError, AttributeError):
+                logger.warning("无法获取unstructured库版本")
+            
             strategy_params = {
                 "fast": {"strategy": "fast"},
                 "hi_res": {"strategy": "hi_res"},
@@ -169,15 +211,14 @@ class LoadingService:
          
             # Prepare chunking parameters based on strategy
             chunking_params = {}
-            if chunking_strategy == "basic":
+            if chunking_strategy == "basic" and chunking_options is not None:
                 chunking_params = {
                     "max_characters": chunking_options.get("maxCharacters", 4000),
                     "new_after_n_chars": chunking_options.get("newAfterNChars", 3000),
-                    "combine_text_under_n_chars": chunking_options.get("combineTextUnderNChars", 2000),
                     "overlap": chunking_options.get("overlap", 200),
                     "overlap_all": chunking_options.get("overlapAll", False)
                 }
-            elif chunking_strategy == "by_title":
+            elif chunking_strategy == "by_title" and chunking_options is not None:
                 chunking_params = {
                     "chunking_strategy": "by_title",
                     "combine_text_under_n_chars": chunking_options.get("combineTextUnderNChars", 2000),
@@ -186,18 +227,37 @@ class LoadingService:
             
             # Combine strategy parameters with chunking parameters
             params = {**strategy_params.get(strategy, {"strategy": "fast"}), **chunking_params}
+            logger.info(f"使用分块策略: {chunking_strategy}, 参数: {params}")
             
-            elements = partition_pdf(file_path, **params)
-            
-            # Add debug logging
-            for elem in elements:
-                logger.debug(f"Element type: {type(elem)}")
-                logger.debug(f"Element content: {str(elem)}")
-                logger.debug(f"Element dir: {dir(elem)}")
-            
+            # 根据unstructured版本的差异，尝试不同的调用方式
             text_blocks = []
             pages = set()
             
+        
+            # 尝试过滤掉可能导致问题的参数
+            valid_params = {}
+            for key, value in params.items():
+                # 确保参数值不为None
+                if value is not None:
+                    valid_params[key] = value
+            
+            logger.info(f"最终使用参数: {valid_params}")
+            
+            # 使用**操作符解包字典，直接将所有键值对作为关键字参数传递
+            logger.info(f"调用partition_pdf，使用**解包操作符传递字典参数")
+            
+            elements = partition_pdf(
+                filename=file_path,
+                infer_table_structure=True,  # 推断表格结构
+                extract_images=True,  # 提取图像
+                image_format="png",  # 图像格式
+                include_metadata=True,  # 包含元数据
+                **valid_params  # 使用**解包操作符，将字典转换为关键字参数
+            )
+            
+            logger.info(f"使用标准参数调用成功，获取了 {len(elements)} 个元素")
+            
+            # 处理元素
             for elem in elements:
                 metadata = elem.metadata.__dict__
                 page_number = metadata.get('page_number')
@@ -229,14 +289,20 @@ class LoadingService:
                         "page": page_number,
                         "metadata": cleaned_metadata
                     })
-            
-            self.total_pages = max(pages) if pages else 0
-            self.current_page_map = text_blocks
-            return "\n".join(block["text"] for block in text_blocks)
-            
+                    
+                self.total_pages = max(pages) if pages else 0
+                self.current_page_map = text_blocks
+                
+                if not text_blocks:
+                    logger.warning("未能从PDF中提取任何文本，将返回空字符串")
+                    return ""
+                    
+                return "\n".join(block["text"] for block in text_blocks)
+        
         except Exception as e:
             logger.error(f"Unstructured error: {str(e)}")
-            raise
+            # 抛出更明确的错误信息
+            raise RuntimeError(f"使用unstructured库处理PDF文档失败: {str(e)}")
     
     def _load_with_pdfplumber(self, file_path: str) -> str:
         """

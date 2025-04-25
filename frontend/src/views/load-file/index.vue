@@ -36,15 +36,15 @@
               <div v-if="loadingMethod === 'unstructured'" style="margin-bottom: 16px;">
                 <div style="margin-bottom: 8px;">Unstructured策略</div>
                 <el-select v-model="unstructuredStrategy" style="width: 100%; margin-bottom: 16px;">
-                  <el-option label="Fast" value="fast" />
-                  <el-option label="High Resolution" value="hi_res" />
-                  <el-option label="OCR Only" value="ocr_only" />
+                  <el-option label="fast" value="fast" />
+                  <el-option label="hi_res" value="hi_res" />
+                  <el-option label="ocr_only" value="ocr_only" />
                 </el-select>
                 
                 <div style="margin-bottom: 8px;">分块策略</div>
                 <el-select v-model="chunkingStrategy" style="width: 100%; margin-bottom: 16px;">
-                  <el-option label="Basic" value="basic" />
-                  <el-option label="By Title" value="by_title" />
+                  <el-option label="basic" value="basic" />
+                  <el-option label="by_title" value="by_title" />
                 </el-select>
                 
                 <!-- Basic分块策略的具体选项 -->
@@ -63,14 +63,6 @@
                         v-model="chunkingOptions.newAfterNChars" 
                         :min="100" 
                         :max="10000"
-                        style="width: 100%;"
-                      />
-                    </el-form-item>
-                    <el-form-item label="合并小于N字符">
-                      <el-input-number 
-                        v-model="chunkingOptions.combineTextUnderNChars" 
-                        :min="100" 
-                        :max="5000"
                         style="width: 100%;"
                       />
                     </el-form-item>
@@ -350,12 +342,13 @@ const hasMoreContent = ref({}) // 跟踪哪些分块有更多内容需要滚动
 const loadingOptions = [
   { label: 'PyMuPDF', value: 'pymupdf' },
   { label: 'PyPDF', value: 'pypdf' },
+  { label: 'PDF Plumber', value: 'pdfplumber' },
   { label: 'Unstructured', value: 'unstructured' }
 ]
 const loadingMethod = ref('pymupdf')
 
 // Unstructured加载配置
-const unstructuredStrategy = ref('fast')
+const unstructuredStrategy = ref('hi_res')
 const chunkingStrategy = ref('basic')
 const chunkingOptions = ref({
   maxCharacters: 4000,

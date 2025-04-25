@@ -67,6 +67,9 @@ async def process_file(
     chunk_size: int = Form(1000),
 ):
     try:
+        # 创建临时目录（如果不存在）
+        os.makedirs("temp", exist_ok=True)
+        
         # 保存上传的文件
         temp_path = os.path.join("temp", file.filename)
         with open(temp_path, "wb") as buffer:
@@ -676,7 +679,13 @@ async def load_file(
         # Parse chunking options if provided
         chunking_options_dict = None
         if chunking_options:
-            chunking_options_dict = json.loads(chunking_options)
+            try:
+                chunking_options_dict = json.loads(chunking_options)
+            except json.JSONDecodeError:
+                logger.warning(f"无法解析chunking_options: {chunking_options}")
+                chunking_options_dict = {}
+        else:
+            chunking_options_dict = {}
 
         # 使用 LoadingService 加载文档
         loading_service = LoadingService()
@@ -735,6 +744,7 @@ async def chunk_document(data: dict = Body(...)):
         doc_id = data.get("doc_id")
         chunking_option = data.get("chunking_option")
         chunk_size = data.get("chunk_size", 1000)
+        overlap_size = data.get("overlap_size", 50)
 
         if not doc_id or not chunking_option:
             raise HTTPException(
@@ -770,6 +780,7 @@ async def chunk_document(data: dict = Body(...)):
             metadata=metadata,
             page_map=page_map,
             chunk_size=chunk_size,
+            overlap_size=overlap_size,
         )
 
         # 生成输出文件名

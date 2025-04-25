@@ -39,6 +39,7 @@
                   <el-option label="固定大小" value="fixed_size" />
                   <el-option label="按段落" value="by_paragraphs" />
                   <el-option label="按句子" value="by_sentences" />
+                  <el-option label="按语义" value="by_semantic" />
                 </el-select>
                 
                 <div v-if="chunkConfig.mode === 'fixed_size'">
