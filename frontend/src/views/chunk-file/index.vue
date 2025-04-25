@@ -19,7 +19,7 @@
                   <el-option
                     v-for="doc in loadedDocuments"
                     :key="doc.id"
-                    :label="doc.displayName || doc.name"
+                    :label="doc.name"
                     :value="doc.id"
                   />
                 </el-select>
