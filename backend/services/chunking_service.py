@@ -6,6 +6,8 @@ from llama_index.core.node_parser import (
     SemanticSplitterNodeParser,
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+import os
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -241,3 +243,66 @@ class ChunkingService:
             # 如果语义分块失败，返回固定大小分块作为备选
             logger.warning("Falling back to fixed size chunking")
             return self._fixed_size_chunks(text, chunk_size, overlap_size)
+
+    def save_document(self, doc_name: str = None, chunks: list = None, document_data: dict = None, chunking_method: str = None) -> str:
+        """
+        保存分块后的文档数据到文件。
+        
+        可以通过两种方式调用:
+        1. 提供document_data: 直接保存完整的文档数据
+        2. 提供chunks和其他参数: 构造文档数据并保存
+        
+        参数:
+            doc_name (str, optional): 文档名称，用于构建输出文件名
+            chunks (list, optional): 文档分块列表
+            document_data (dict, optional): 完整的文档数据对象，如果提供则直接保存
+            chunking_method (str, optional): 使用的分块方法
+            
+        返回:
+            str: 保存的文件路径
+        """
+        try:
+            # 确保输出目录存在
+            os.makedirs("01-chunked-docs", exist_ok=True)
+            
+            # 如果提供了document_data，直接使用
+            if document_data:
+                output_data = document_data
+                # 确保有output_file字段
+                if "output_file" not in output_data:
+                    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                    # 尝试从文档数据中提取文件名
+                    base_name = output_data.get("filename", "document").replace(".pdf", "").split("_")[0]
+                    output_data["output_file"] = f"{base_name}_{output_data.get('chunking_method', 'chunked')}_{timestamp}.json"
+            else:
+                # 验证必要的参数
+                if not chunks or not doc_name or not chunking_method:
+                    raise ValueError("Missing required parameters for saving document")
+                
+                # 构建文档数据
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                base_name = doc_name.replace(".pdf", "").split("_")[0]
+                output_filename = f"{base_name}_{chunking_method}_{timestamp}.json"
+                
+                output_data = {
+                    "filename": doc_name,
+                    "total_chunks": len(chunks),
+                    "total_pages": max([chunk["metadata"].get("page_number", 1) for chunk in chunks]) if chunks else 1,
+                    "chunking_method": chunking_method,
+                    "timestamp": datetime.now().isoformat(),
+                    "chunks": chunks,
+                    "output_file": output_filename
+                }
+            
+            # 保存到文件
+            output_path = os.path.join("01-chunked-docs", output_data["output_file"])
+            
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(output_data, f, ensure_ascii=False, indent=2)
+                
+            logger.info(f"Document saved to {output_path}")
+            return output_path
+        
+        except Exception as e:
+            logger.error(f"Error saving chunked document: {str(e)}")
+            raise

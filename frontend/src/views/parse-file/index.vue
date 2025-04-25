@@ -71,12 +71,23 @@
           style="width: 95%; height: calc(90vh - 104px); display: flex; flex-direction: column; overflow-x: hidden;">
           <template #header>
             <div class="flex justify-between items-center">
-              <span class="font-medium">解析结果</span>
+              <el-button-group>
+                <el-button :type="activeTab === 'preview' ? 'primary' : 'default'" 
+                          :plain="activeTab === 'management'"
+                          @click="activeTab = 'preview'">
+                  解析结果
+                </el-button>
+                <el-button :type="activeTab === 'management' ? 'primary' : 'default'"
+                          :plain="activeTab === 'preview'"
+                          @click="activeTab = 'management'">
+                  文档记录
+                </el-button>
+              </el-button-group>
             </div>
           </template>
 
           <!-- 预览内容 -->
-          <div style="display: flex; flex-direction: column; flex: 1; overflow: hidden; height: 100%;">
+          <div v-if="activeTab === 'preview'" style="display: flex; flex-direction: column; flex: 1; overflow: hidden; height: 100%;">
             <div v-if="parsedContent"
               style="width: 100%; text-align: left; display: flex; flex-direction: column; height: 100%; overflow: auto;">
               <!-- 文档信息卡片 -->
@@ -210,6 +221,84 @@
               <el-empty description="上传并解析文件后将在此处显示结果" />
             </div>
           </div>
+
+          <!-- 文档记录模块 -->
+          <div v-else style="flex: 1; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; height: 100%;">
+            <el-input
+              v-model="searchQuery"
+              placeholder="搜索文件..."
+              style="width: 100%; margin-bottom: 16px;"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            
+            <div style="flex: 1; overflow-y: auto; overflow-x: hidden; height: calc(100% - 60px);">
+              <el-table 
+                :data="filteredFiles" 
+                style="width: 100%;" 
+                border 
+                height="100%" 
+                :show-overflow-tooltip="true"
+                v-loading="loading"
+              >
+                <el-table-column label="文件名" min-width="200">
+                  <template #default="{ row }">
+                    <div style="display: flex; align-items: center;">
+                      <el-icon style="margin-right: 8px;"><Document /></el-icon>
+                      <span>{{ row.name }}</span>
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="页数" width="80" align="center">
+                  <template #default="{ row }">
+                    {{ row.metadata?.total_pages || 'N/A' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="内容数" width="80" align="center">
+                  <template #default="{ row }">
+                    {{ row.metadata?.total_elements || 'N/A' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="解析方式" width="100" align="center">
+                  <template #default="{ row }">
+                    {{ getParsingOptionText(row.metadata?.parsing_method || 'N/A') }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="创建时间" width="180" align="center">
+                  <template #default="{ row }">
+                    {{ row.metadata?.timestamp ? formatDate(row.metadata.timestamp) : 'N/A' }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="120" align="center">
+                  <template #default="{ row }">
+                    <el-button link type="primary" @click="handleViewDocument(row)">查看</el-button>
+                    <el-button link type="danger" @click="handleDeleteDocument(row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            
+            <div style="display: flex; align-items: center; margin-top: 16px;">
+              <span style="font-size: 14px; color: #606266;">Total {{ total }}</span>
+              <el-select v-model="pageSize" size="small" style="width: 120px; margin: 0 8px;">
+                <el-option label="10/page" :value="10" />
+                <el-option label="20/page" :value="20" />
+                <el-option label="50/page" :value="50" />
+              </el-select>
+              <div style="margin-left: auto;">
+                <el-pagination
+                  layout="prev, pager, next"
+                  :total="total"
+                  :page-size="pageSize"
+                  v-model:current-page="currentPage"
+                  small
+                />
+              </div>
+            </div>
+          </div>
         </el-card>
       </div>
     </div>
@@ -231,7 +320,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { Document, VideoPlay, CircleClose, Close, Download } from '@element-plus/icons-vue'
+import { Document, VideoPlay, CircleClose, Close, Download, Search, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiUrls, apiBaseUrl } from '@/config/api'
 
@@ -247,6 +336,22 @@ const docName = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const isLoading = ref(false)
+const activeTab = ref('preview')
+const searchQuery = ref('')
+const loading = ref(false)
+const total = ref(0)
+const files = ref([]) // 存储已解析的文档列表
+
+// 过滤后的文件列表
+const filteredFiles = computed(() => {
+  if (!searchQuery.value) return files.value
+  const query = searchQuery.value.toLowerCase()
+  return files.value.filter(file => 
+    (file.name.toLowerCase().includes(query)) || 
+    (file.metadata?.filename && file.metadata.filename.toLowerCase().includes(query)) ||
+    (file.metadata?.parsing_method && file.metadata.parsing_method.toLowerCase().includes(query))
+  )
+})
 
 // 处理文件变化
 const handleFileChange = (file) => {
@@ -398,10 +503,12 @@ const handleStartParse = async () => {
       processingParse.value = false
       isLoading.value = false
       
-      // 3秒后清除成功状态
+      // 3秒后清除成功状态并刷新文档列表
       setTimeout(() => {
         if (parseStatus.value === '解析处理完成') {
           parseStatus.value = ''
+          // 刷新文档列表
+          refreshDocumentList()
         }
       }, 3000)
       
@@ -627,10 +734,140 @@ const copyContent = (item) => {
   });
 }
 
-// 页面加载时执行
+// 获取已解析的文档列表
+const fetchParsedDocuments = async () => {
+  loading.value = true
+  try {
+    const response = await fetch(`${apiBaseUrl}/documents?type=parsed`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态码: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('获取到的已解析文档列表:', data)
+    
+    if (data && Array.isArray(data.documents)) {
+      // 直接使用返回的文档列表数据
+      files.value = data.documents
+      total.value = files.value.length
+    } else {
+      files.value = []
+      total.value = 0
+    }
+  } catch (error) {
+    console.error('获取已解析文档列表失败:', error)
+    ElMessage.error('获取已解析文档列表失败')
+    files.value = []
+    total.value = 0
+  } finally {
+    loading.value = false
+  }
+}
+
+// 查看文档详情
+const handleViewDocument = async (row) => {
+  // 切换到预览标签页
+  activeTab.value = 'preview'
+  isLoading.value = true
+  
+  try {
+    // 获取文档详情
+    const docId = row.id || row.name.replace(/\.json$/, '')
+    const encodedId = encodeURIComponent(docId)
+    const response = await fetch(`${apiBaseUrl}/documents/${encodedId}.json?type=parsed`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP错误! 状态码: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('文档详情数据:', data)
+    
+    // 处理文档详情数据
+    parsedContent.value = data
+    
+    // 确保内容数组存在
+    if (!parsedContent.value.content) {
+      parsedContent.value.content = []
+    }
+    
+    // 处理内容数据，确保每项都有页码
+    parsedContent.value.content = parsedContent.value.content.map(item => {
+      if (!item.page && item.page !== 0) {
+        item.page = 1
+      }
+      return item
+    })
+    
+    // 按页码排序内容
+    parsedContent.value.content.sort((a, b) => a.page - b.page)
+    
+    ElMessage.success(`查看文档: ${row.metadata?.filename || row.name}`)
+  } catch (error) {
+    console.error('获取文档详情失败:', error)
+    previewError.value = true
+    previewErrorMessage.value = `获取文档详情失败: ${error.message}`
+    ElMessage.error(`获取文档详情失败: ${error.message}`)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// 删除文档
+const handleDeleteDocument = (row) => {
+  ElMessageBox.confirm(
+    '确定要删除该文档吗？此操作不可逆。',
+    '警告',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      const docId = row.id || row.name.replace(/\.json$/, '')
+      const encodedId = encodeURIComponent(docId)
+      const response = await fetch(`${apiBaseUrl}/documents/${encodedId}?type=parsed`, {
+        method: 'DELETE'
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP错误! 状态码: ${response.status}`)
+      }
+      
+      // 从列表中移除
+      const index = files.value.findIndex(item => item.id === row.id || item.name === row.name)
+      if (index !== -1) {
+        files.value.splice(index, 1)
+        total.value = files.value.length
+      }
+      
+      // 如果当前正在预览该文件，清除预览
+      if (parsedContent.value && parsedContent.value.metadata?.filename === row.metadata?.filename) {
+        parsedContent.value = null
+      }
+      
+      ElMessage.success('删除文档成功')
+    } catch (error) {
+      console.error('删除文档失败:', error)
+      ElMessage.error(`删除文档失败: ${error.message}`)
+    }
+  }).catch(() => {
+    // 取消删除，不做任何操作
+  })
+}
+
+// 页面加载时获取已解析文档列表
 onMounted(() => {
-  // 初始化逻辑
+  // 获取已解析文档列表
+  fetchParsedDocuments()
 })
+
+// 在解析完成后刷新文档列表
+const refreshDocumentList = () => {
+  fetchParsedDocuments()
+}
 </script>
 
 <style scoped>

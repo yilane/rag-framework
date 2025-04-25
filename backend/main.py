@@ -18,6 +18,7 @@ from services.embedding_service import EmbeddingService, EmbeddingConfig
 from services.vector_store_service import VectorStoreService, VectorDBConfig
 from services.search_service import SearchService
 from services.parsing_service import ParsingService
+from services.loading_service import LoadingService
 import logging
 from enum import Enum
 from utils.config import VectorDBProvider
@@ -479,6 +480,32 @@ async def get_documents(type: str = Query("all")):
                                 }
                             )
 
+        # 读取parsed文档
+        if type in ["all", "parsed"]:
+            parsed_dir = "01-parsed-docs"
+            if os.path.exists(parsed_dir):
+                for filename in os.listdir(parsed_dir):
+                    if filename.endswith(".json"):
+                        file_path = os.path.join(parsed_dir, filename)
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            doc_data = json.load(f)
+                            metadata = doc_data.get("metadata", {})
+                            documents.append(
+                                {
+                                    "id": filename,
+                                    "name": filename,
+                                    "type": "parsed",
+                                    "metadata": {
+                                        "filename": metadata.get("filename"),
+                                        "filetype": metadata.get("filetype"),
+                                        "filesize": metadata.get("filesize"),
+                                        "total_elements": metadata.get("total_elements"),
+                                        "parsing_method": metadata.get("parsing_method"),
+                                        "timestamp": metadata.get("timestamp"),
+                                    },
+                                }
+                            )
+                            
         return {"documents": documents}
     except Exception as e:
         logger.error(f"Error getting documents: {str(e)}")
@@ -493,7 +520,14 @@ async def get_document(doc_name: str, type: str = Query("loaded")):
         file_name = f"{base_name}.json"
 
         # 根据类型选择不同的目录
-        directory = "01-loaded-docs" if type == "loaded" else "01-chunked-docs"
+        if type == "loaded":
+            directory = "01-loaded-docs"
+        elif type == "chunked":
+            directory = "01-chunked-docs"
+        elif type == "parsed":
+            directory = "01-parsed-docs"
+        else:
+            directory = "01-loaded-docs"  # 默认目录
         file_path = os.path.join(directory, file_name)
 
         logger.info(f"Attempting to read document from: {file_path}")
@@ -521,7 +555,14 @@ async def delete_document(doc_name: str, type: str = Query("loaded")):
         file_name = f"{base_name}.json"
 
         # 根据类型选择不同的目录
-        directory = "01-loaded-docs" if type == "loaded" else "01-chunked-docs"
+        if type == "loaded":
+            directory = "01-loaded-docs"
+        elif type == "chunked":
+            directory = "01-chunked-docs"
+        elif type == "parsed":
+            directory = "01-parsed-docs"
+        else:
+            directory = "01-loaded-docs"  # 默认目录
         file_path = os.path.join(directory, file_name)
 
         logger.info(f"Attempting to delete document: {file_path}")
@@ -788,21 +829,14 @@ async def chunk_document(data: dict = Body(...)):
             overlap_size=overlap_size,
         )
 
-        # 生成输出文件名
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        base_name = doc_data["filename"].replace(".pdf", "").split("_")[0]
-        output_filename = f"{base_name}_{chunking_option}_{timestamp}.json"
-        # 在结果中添加输出文件名
-        result["output_file"] = output_filename
+        # 使用chunking_service的save_document方法保存结果
+        filepath = chunking_service.save_document(document_data=result)
+        
+        # 读取保存的文档以返回
+        with open(filepath, "r", encoding="utf-8") as f:
+            document_data = json.load(f)
 
-        output_path = os.path.join("01-chunked-docs", output_filename)
-        os.makedirs("01-chunked-docs", exist_ok=True)
-
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-
-        return result
-
+        return {"loaded_content": document_data, "filepath": filepath}
     except Exception as e:
         logger.error(f"Error chunking document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

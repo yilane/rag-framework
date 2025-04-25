@@ -57,6 +57,9 @@ class ParsingService:
         
         # 配置表格OCR
         self.table_ocr = TesseractOCR(n_threads=2, lang=self.ocr_lang)
+        
+        # 创建保存目录
+        os.makedirs("01-parsed-docs", exist_ok=True)
 
     def parse_document(self, file_path: str, method: str, metadata: dict = None) -> dict:
         """
@@ -115,10 +118,51 @@ class ParsingService:
                 "content": parsed_content
             }
             
+            # 保存解析结果
+            self.save_document(document_data)
+            
             return document_data
             
         except Exception as e:
             logger.error(f"Error in parse_document: {str(e)}")
+            raise
+
+    def save_document(self, document_data: Dict[str, Any]) -> str:
+        """
+        将解析的文档保存为JSON格式
+        
+        参数:
+            document_data (Dict[str, Any]): 包含元数据和解析内容的文档数据字典
+            
+        返回:
+            str: 保存的文件路径
+        """
+        try:
+            metadata = document_data.get("metadata", {})
+            filename = metadata.get("filename", "unknown")
+            parsing_method = metadata.get("parsing_method", "unknown")
+            
+            # 构建文件名，包含时间戳避免重名
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            base_name = os.path.splitext(filename)[0]
+            output_filename = f"{base_name}_{parsing_method}_{timestamp}.json"
+            
+            # 保存路径
+            filepath = os.path.join("01-parsed-docs", output_filename)
+            
+            # 确保目录存在
+            os.makedirs("01-parsed-docs", exist_ok=True)
+            
+            # 保存为JSON文件
+            with open(filepath, 'w', encoding='utf-8') as f:
+                import json
+                json.dump(document_data, f, ensure_ascii=False, indent=2)
+                
+            logger.info(f"Document saved to: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"Error saving document: {str(e)}")
             raise
 
     def _parse_all_in_one(self, file_path: str, file_extension: str) -> list:
