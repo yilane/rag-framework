@@ -32,7 +32,7 @@ git clone https://github.com/yilane/ragdev-project.git
 
 #### 1. 检查是否已安装 npm：
 
-- 进入前端项目目录（例如 `cd web-vue3/`）。
+- 进入前端项目目录（例如 `cd frontend/`）。
 - 在终端中运行命令：`npm -v`
 - 如果已安装，将显示 npm 的版本号。
 
@@ -48,7 +48,7 @@ git clone https://github.com/yilane/ragdev-project.git
 
 #### 4. 运行前端组件：
 
-修改`web-vue3/src/config/api.js`中的代码环境地址`apiBaseUrl`
+修改`frontend/src/config/api.js`中的代码环境地址`apiBaseUrl`
 
 ```bash
 const config = {
@@ -164,7 +164,7 @@ python start_server.py reload
 ```
 .
 ├── backend/               # 后端项目目录
-├── web-vue3/              # 前端项目目录
+├── frontend/              # 前端项目目录
 ├── requirements_ubun.txt  # Ubuntu环境依赖
 ├── requirements_win.txt   # Windows环境依赖
 └── README.md              # 项目说明文档
@@ -196,7 +196,7 @@ backend/
 
 ### 前端项目架构 
 ```
-web-vue3/
+frontend/
 ├── public/            # 静态资源目录
 ├── src/               # 源代码目录
 │   ├── assets/        # 项目资源文件(图片、字体等)
@@ -224,7 +224,7 @@ web-vue3/
 
 2. **跨域访问问题**
    - 问题：前端无法访问后端 API，报 CORS 错误
-   - 解决：检查 `web-vue3/src/config/api.js` 中的 `apiBaseUrl` 配置
+   - 解决：检查 `frontend/src/config/api.js` 中的 `apiBaseUrl` 配置
    - 建议：确保后端已正确配置 CORS 允许的域名
 
 3. **页面样式异常**
