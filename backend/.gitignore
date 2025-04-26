@@ -1,0 +1,61 @@
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 项目特定目录
+temp/
+logs/
+huggingface_cache/
+
+# 生成和索引文件 - 根据项目需要可能需要保留或排除
+02-embedded-docs/
+01-loaded-docs/
+01-chunked-docs/
+01-parsed-docs/
+03-vector-store/
+04-search-results/
+05-generation-results/
+
+# 服务器相关文件
+server.pid
+
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# 日志文件
+*.log
+
+# IDE文件
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 敏感配置
+*.env
+*.pem
+config.local.json 
