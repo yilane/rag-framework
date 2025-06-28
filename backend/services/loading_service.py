@@ -38,7 +38,7 @@ class LoadingService:
         self.current_page_map = []
         
         # 是否禁用unstructured功能，如果遇到一致性问题可以设置为True
-        self.disable_unstructured = os.environ.get("DISABLE_UNSTRUCTURED", "false").lower() == "true"
+        self.disable_unstructured = os.environ.get("    ", "false").lower() == "true"
         if self.disable_unstructured:
             logger.warning("unstructured功能已被禁用，将使用备用加载方法")
             

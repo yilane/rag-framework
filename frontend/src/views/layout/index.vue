@@ -1,23 +1,24 @@
 <template>
-  <el-container class="h-screen">
-    <el-aside width="256px" class="bg-gray-800 fixed left-0 top-0 h-screen">
-      <div class="p-4">
-        <div class="flex items-center justify-center mb-6">
-          <div class="logo">RAG System</div>
+  <el-container class="layout-container">
+    <el-aside width="256px" class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-container">
+          <div class="logo">RAG Framework</div>
         </div>
       </div>
       <el-menu
         :default-active="route.path"
-        class="border-none"
-        background-color="#1f2937"
-        text-color="#fff"
-        active-text-color="#409eff"
+        class="sidebar-menu"
+        background-color="#374151"
+        text-color="#ffffff"
+        active-text-color="#60a5fa"
         router
       >
         <el-menu-item 
           v-for="item in menuItems" 
           :key="item.path"
           :index="'/' + item.path"
+          class="menu-item"
         >
           <el-icon>
             <component :is="item.meta.icon" />
@@ -27,12 +28,12 @@
       </el-menu>
     </el-aside>
 
-    <el-container class="ml-64">
-      <el-header class="bg-white border-b flex items-center px-4" style="height: 60px;">
-        <h2 class="text-title flex items-center">
+    <el-container class="main-container">
+      <el-header class="main-header">
+        <h2 class="page-title">
           {{ route.meta.title }}
           <el-button
-            class="ml-4 refresh-btn"
+            class="refresh-btn"
             type="info"
             :icon="Refresh"
             text
@@ -41,7 +42,9 @@
           />
         </h2>
       </el-header>
-      <router-view />
+      <el-main class="main-content">
+        <router-view />
+      </el-main>
     </el-container>
   </el-container>
 </template>
@@ -64,61 +67,131 @@ const refreshCurrentPage = () => {
 </script>
 
 <style scoped>
-.el-aside {
-  background-color: #1f2937;
+.layout-container {
+  height: 100vh;
+  overflow: hidden;
 }
 
-.el-menu {
-  border-right: none;
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  background-color: #374151;
+  z-index: 1000;
+  border-right: 1px solid #e5e7eb;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
 }
 
-.el-menu-item {
-  height: 50px;
-  line-height: 50px;
+.sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid #4b5563;
 }
 
-.el-menu-item .el-icon {
-  margin-right: 8px;
+.logo-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .logo {
-  font-family: 'Roboto', 'Arial', sans-serif;
-  font-size: 28px;
+  font-family: 'Inter', 'Roboto', 'Arial', sans-serif;
+  font-size: 24px;
   font-weight: 700;
-  color: #409EFF;
+  color: #60a5fa;
   text-decoration: none;
-  letter-spacing: 1px;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  height: 100%;
+  letter-spacing: 0.5px;
   white-space: nowrap;
-  overflow: visible;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.text-title {
-  margin: 0;
-  font-size: 18px;
-  color: #303133;
-  font-weight: 500;
+.sidebar-menu {
+  border-right: none;
+  background-color: #374151;
+}
+
+.menu-item {
+  height: 48px;
+  line-height: 48px;
+  margin: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.menu-item:hover {
+  background-color: #4b5563 !important;
+}
+
+.menu-item.is-active {
+  background-color: #1e40af !important;
+  color: #ffffff !important;
+}
+
+.menu-item .el-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.main-container {
+  margin-left: 256px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-header {
+  height: 60px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
-  height: 60px;
+  padding: 0 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 18px;
+  color: #1f2937;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
 }
 
 .refresh-btn {
-  padding: 4px 8px;
-  color: #606266;
-  font-size: 20px;
-}
-
-.refresh-btn :deep(.el-icon) {
-  font-size: 20px;
+  margin-left: 12px;
+  padding: 6px 8px;
+  color: #6b7280;
+  font-size: 16px;
+  border: none;
+  background: transparent;
+  transition: all 0.2s ease;
 }
 
 .refresh-btn:hover {
-  color: #409EFF;
-  background: transparent;
+  color: #3b82f6;
+  background-color: #f3f4f6;
+}
+
+.main-content {
+  flex: 1;
+  padding: 24px;
+  background-color: #f9fafb;
+  overflow-y: auto;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 240px;
+  }
+  
+  .main-container {
+    margin-left: 240px;
+  }
+  
+  .main-content {
+    padding: 16px;
+  }
 }
 </style> 

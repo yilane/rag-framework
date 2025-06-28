@@ -1,13 +1,13 @@
 // 定义不同环境的配置
 const config = {
   development: {
-    baseUrl: 'http://localhost:8005'
+    baseUrl: 'http://localhost:8003'
   },
   production: {
     baseUrl: 'http://api.example.com'
   },
   test: {
-    baseUrl: 'http://localhost:8005'
+    baseUrl: 'http://localhost:8003'
   }
 };
 

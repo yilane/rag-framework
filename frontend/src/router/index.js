@@ -7,15 +7,24 @@ const router = createRouter({
       path: '/',
       name: 'Layout',
       component: () => import('../views/layout/index.vue'),
-      redirect: '/load-file',
+      redirect: '/parse-file',
       children: [
+        // {
+        //   path: 'load-file',
+        //   name: 'LoadFile',
+        //   component: () => import('../views/load-file/index.vue'),
+        //   meta: {
+        //     title: '加载文档',
+        //     icon: 'Upload'
+        //   }
+        // },
         {
-          path: 'load-file',
-          name: 'LoadFile',
-          component: () => import('../views/load-file/index.vue'),
+          path: 'parse-file',
+          name: 'ParseFile',
+          component: () => import('../views/parse-file/index.vue'),
           meta: {
-            title: '加载文档',
-            icon: 'Upload'
+            title: '文档解析',
+            icon: 'Document'
           }
         },
         {
@@ -23,16 +32,7 @@ const router = createRouter({
           name: 'ChunkFile',
           component: () => import('../views/chunk-file/index.vue'),
           meta: {
-            title: '分割文档',
-            icon: 'Document'
-          }
-        },
-        {
-          path: 'parse-file',
-          name: 'ParseFile',
-          component: () => import('../views/parse-file/index.vue'),
-          meta: {
-            title: '解析文档',
+            title: '文本分块',
             icon: 'Document'
           }
         },
@@ -41,7 +41,7 @@ const router = createRouter({
           name: 'Embedding',
           component: () => import('../views/embedding/index.vue'),
           meta: {
-            title: '嵌入文档',
+            title: '信息嵌入',
             icon: 'Connection'
           }
         },
@@ -50,7 +50,7 @@ const router = createRouter({
           name: 'Indexing',
           component: () => import('../views/indexing/index.vue'),
           meta: {
-            title: '向量数据索引',
+            title: '向量存储',
             icon: 'DataAnalysis'
           }
         },

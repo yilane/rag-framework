@@ -387,16 +387,16 @@ const handleCancel = () => {
   // progressText.value = ''
 }
 
-// 获取已加载的文档列表
+// 获取已解析的文档列表
 const fetchLoadedDocuments = async () => {
   loadingDocuments.value = true
   try {
-    // 获取已加载（但未分块）的文档列表
-    const url = `${apiBaseUrl}/documents?type=loaded`
-    console.log('请求已加载文档列表URL:', url)
+    // 获取已解析（可用于分块）的文档列表
+    const url = `${apiBaseUrl}/documents?type=parsed`
+    console.log('请求已解析文档列表URL:', url)
     
     const response = await axios.get(url)
-    console.log('获取到的已加载文档列表:', response.data)
+    console.log('获取到的已解析文档列表:', response.data)
     
     if (response.data && Array.isArray(response.data.documents)) {
       // 处理接收到的数据
@@ -411,9 +411,9 @@ const fetchLoadedDocuments = async () => {
         }
       })
       
-      console.log('处理后的已加载文档列表:', loadedDocuments.value)
+      console.log('处理后的已解析文档列表:', loadedDocuments.value)
     } else {
-      console.warn('获取已加载文档列表: 响应格式不符合预期', response.data)
+      console.warn('获取已解析文档列表: 响应格式不符合预期', response.data)
       loadedDocuments.value = []
     }
     
@@ -430,7 +430,7 @@ const fetchLoadedDocuments = async () => {
     }
     
     // 记录API调用错误
-    logApiCall('GET', `${apiBaseUrl}/documents?type=loaded`, {}, null, error)
+    logApiCall('GET', `${apiBaseUrl}/documents?type=parsed`, {}, null, error)
     
     ElMessage.error('获取文档列表失败')
     loadedDocuments.value = []

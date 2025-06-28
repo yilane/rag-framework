@@ -872,26 +872,59 @@ async def chunk_document(data: dict = Body(...)):
                 detail="Missing required parameters: doc_id and chunking_option",
             )
 
-        # 读取已加载的文档
-        file_path = os.path.join("01-loaded-docs", doc_id)
-        if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Document not found")
+        # 首先尝试从01-loaded-docs读取文档
+        loaded_file_path = os.path.join("01-loaded-docs", doc_id)
+        parsed_file_path = os.path.join("01-parsed-docs", doc_id)
+        
+        doc_data = None
+        page_map = []
+        metadata = {}
+        
+        if os.path.exists(loaded_file_path):
+            # 从loaded文档读取（原有逻辑）
+            with open(loaded_file_path, "r", encoding="utf-8") as f:
+                doc_data = json.load(f)
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            doc_data = json.load(f)
+            # 构建页面映射
+            page_map = [
+                {"page": chunk["metadata"]["page_number"], "text": chunk["content"]}
+                for chunk in doc_data["chunks"]
+            ]
 
-        # 构建页面映射
-        page_map = [
-            {"page": chunk["metadata"]["page_number"], "text": chunk["content"]}
-            for chunk in doc_data["chunks"]
-        ]
+            # 准备元数据
+            metadata = {
+                "filename": doc_data["filename"],
+                "loading_method": doc_data["loading_method"],
+                "total_pages": doc_data["total_pages"],
+            }
+            
+        elif os.path.exists(parsed_file_path):
+            # 从parsed文档读取（新增功能）
+            with open(parsed_file_path, "r", encoding="utf-8") as f:
+                doc_data = json.load(f)
+            
+            # 转换parsed格式为page_map格式
+            page_map = []
+            for item in doc_data.get("content", []):
+                if item.get("content"):  # 确保有内容
+                    page_map.append({
+                        "page": item.get("page", 1),
+                        "text": item.get("content", "")
+                    })
+            
+            # 准备元数据
+            metadata = {
+                "filename": doc_data.get("metadata", {}).get("filename", doc_id),
+                "loading_method": doc_data.get("metadata", {}).get("parsing_method", "parsed"),
+                "total_pages": max([item.get("page", 1) for item in doc_data.get("content", [])]) if doc_data.get("content") else 1,
+            }
+            
+        else:
+            raise HTTPException(status_code=404, detail="Document not found in loaded or parsed directories")
 
-        # 准备元数据
-        metadata = {
-            "filename": doc_data["filename"],
-            "loading_method": doc_data["loading_method"],
-            "total_pages": doc_data["total_pages"],
-        }
+        # 检查是否有有效的页面映射
+        if not page_map:
+            raise HTTPException(status_code=400, detail="No valid content found for chunking")
 
         chunking_service = ChunkingService()
         result = chunking_service.chunk_text(
@@ -903,6 +936,16 @@ async def chunk_document(data: dict = Body(...)):
             overlap_size=overlap_size,
         )
 
+        # 修复输出文件名以匹配前端期望的格式
+        # 使用原始doc_id而不是从metadata获取的filename
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        base_name = doc_id.replace(".json", "")
+        expected_output_file = f"{base_name}_{chunking_option}_{timestamp}.json"
+        
+        # 更新result中的filename和output_file以匹配前端期望
+        result["filename"] = doc_id
+        result["output_file"] = expected_output_file
+        
         # 使用chunking_service的save_document方法保存结果
         filepath = chunking_service.save_document(document_data=result)
         
@@ -910,7 +953,12 @@ async def chunk_document(data: dict = Body(...)):
         with open(filepath, "r", encoding="utf-8") as f:
             document_data = json.load(f)
 
-        return {"loaded_content": document_data, "filepath": filepath}
+        return {
+            "loaded_content": document_data, 
+            "filepath": filepath,
+            "output_file": expected_output_file,
+            "chunked_doc_id": expected_output_file
+        }
     except Exception as e:
         logger.error(f"Error chunking document: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
