@@ -4,15 +4,13 @@ dotenv.load_dotenv()
 import json
 from datetime import datetime
 from enum import Enum
-import boto3
-from langchain_community.embeddings import BedrockEmbeddings, OpenAIEmbeddings, HuggingFaceEmbeddings
+from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceEmbeddings
 
 class EmbeddingProvider(str, Enum):
     """
     嵌入提供商枚举类，定义支持的嵌入模型提供商
     """
     OPENAI = "openai"
-    BEDROCK = "bedrock"
     HUGGINGFACE = "huggingface"
 
 class EmbeddingConfig:
@@ -29,7 +27,6 @@ class EmbeddingConfig:
         """
         self.provider = provider
         self.model_name = model_name
-        self.aws_region = "ap-southeast-1"  # 可配置
 
 class EmbeddingService:
     """
@@ -268,19 +265,7 @@ class EmbeddingFactory:
         
         for attempt in range(max_retries):
             try:
-                if config.provider == EmbeddingProvider.BEDROCK:
-                    bedrock_client = boto3.client(
-                        service_name='bedrock-runtime',
-                        region_name=config.aws_region,
-                        aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-                        aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY')
-                    )
-                    return BedrockEmbeddings(
-                        client=bedrock_client,
-                        model_id=config.model_name
-                    )
-                    
-                elif config.provider == EmbeddingProvider.OPENAI:
+                if config.provider == EmbeddingProvider.OPENAI:
                     return OpenAIEmbeddings(
                         model=config.model_name,
                         openai_api_key=os.getenv('OPENAI_API_KEY')

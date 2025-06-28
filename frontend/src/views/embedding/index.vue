@@ -14,9 +14,9 @@
                 <div style="margin-bottom: 16px;">
                   <div style="margin-bottom: 8px; font-size: 14px; color: #606266;">选择文档</div>
                   <div style="margin-bottom: 8px; font-size: 12px; color: #909399;">
-                    可用文档数量: {{ availableDocs.length }}
+                    可用分块文档数量: {{ availableDocs.length }}
                   </div>
-                  <el-select v-model="selectedDoc" placeholder="请选择文档" style="width: 100%;" :loading="loadingDocuments">
+                  <el-select v-model="selectedDoc" placeholder="请选择已分块的文档" style="width: 100%;" :loading="loadingDocuments">
                     <el-option v-for="doc in availableDocs" :key="doc.id" :label="`${doc.name} (${doc.type})`"
                       :value="doc.name" />
                   </el-select>
@@ -29,7 +29,6 @@
                   </div>
                   <el-select v-model="embeddingConfig.provider" placeholder="请选择嵌入提供商" style="width: 100%;" required>
                     <el-option label="OpenAI" value="openai" />
-                    <el-option label="Bedrock" value="bedrock" />
                     <el-option label="HuggingFace" value="huggingface" />
                   </el-select>
                 </div>
@@ -127,7 +126,7 @@
               </div>
             </div>
             <div v-else class="empty-container">
-              <el-empty description="选择一个文档并生成嵌入或查看现有嵌入" />
+              <el-empty description="选择一个已分块的文档并生成嵌入或查看现有嵌入" />
             </div>
           </div>
 
@@ -228,10 +227,6 @@ const modelOptionsMap = {
     { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },
     { label: 'text-embedding-3-small', value: 'text-embedding-3-small' },
     { label: 'text-embedding-ada-002', value: 'text-embedding-ada-002' }
-  ],
-  bedrock: [
-    { label: 'cohere.embed-english-v3', value: 'cohere.embed-english-v3' },
-    { label: 'cohere.embed-multilingual-v3', value: 'cohere.embed-multilingual-v3' }
   ]
 }
 
@@ -283,13 +278,13 @@ onMounted(() => {
   fetchEmbeddedDocs()
 })
 
-// 获取可用文档列表
+// 获取可用文档列表 - 只获取已分块的文档
 const fetchAvailableDocs = async () => {
   loadingDocuments.value = true
 
   try {
-    const response = await axios.get(`${apiBaseUrl}/documents?type=all`)
-    console.log('获取文档列表响应:', response.data)
+    const response = await axios.get(`${apiBaseUrl}/documents?type=chunked`)
+    console.log('获取分块文档列表响应:', response.data)
 
     if (response.data && Array.isArray(response.data.documents)) {
       availableDocs.value = response.data.documents
@@ -298,7 +293,7 @@ const fetchAvailableDocs = async () => {
       availableDocs.value = []
     }
   } catch (error) {
-    console.error('获取文档列表失败:', error)
+    console.error('获取分块文档列表失败:', error)
     availableDocs.value = []
   } finally {
     loadingDocuments.value = false
@@ -365,7 +360,7 @@ const getStatusText = (status) => {
 // 启动嵌入处理
 const handleStartEmbedding = async () => {
   if (!selectedDoc.value) {
-    embeddingStatus.value = '错误: 请先选择一个文档'
+    embeddingStatus.value = '错误: 请先选择一个已分块的文档'
     return
   }
 
@@ -376,7 +371,7 @@ const handleStartEmbedding = async () => {
     // 查找选中的文档对象
     const docObj = availableDocs.value.find(doc => doc.name === selectedDoc.value)
     if (!docObj) {
-      throw new Error('找不到选中的文档')
+      throw new Error('找不到选中的分块文档')
     }
 
     // 构建请求参数

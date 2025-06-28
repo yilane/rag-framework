@@ -232,12 +232,12 @@ const status = ref('')
 // 搜索配置
 const searchConfig = ref({
   type: 'hybrid',
-  threshold: 0.7,
+  threshold: 0.5,    // 相似度阈值设为50%
   database: 'milvus',
   topK: 3,
   reranking: false,
   rerankingModel: 'cross-encoder',
-  wordCountThreshold: 50,
+  wordCountThreshold: 30,    // 最小字数设为30
   saveResults: false
 })
 

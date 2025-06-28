@@ -17,11 +17,11 @@
                   :auto-upload="false" 
                   :on-change="handleFileChange"
                   :before-upload="checkFileType"
-                  accept=".pdf,.md,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp">
+                  accept=".pdf,.doc,.docx,.pptx,.ppt,.xlsx,.xls,.html,.htm,.epub,.md,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.webp">
                   <el-button type="primary">选择文件</el-button>
                   <template #tip>
                     <div class="el-upload__tip">
-                      支持的文件类型：PDF、Markdown、Word、文本文件、图片
+                      支持多种格式：PDF、Word、图片、Markdown等，智能解析无需选择
                     </div>
                   </template>
                 </el-upload>
@@ -29,22 +29,12 @@
                 <div style="margin-top: 8px; color: #606266;" v-else>已选择: {{ selectedFile.name }}</div>
               </div>
 
-              <!-- 解析选项 -->
-              <div style="margin-top: 16px;">
-                <div style="margin-bottom: 8px; font-size: 14px;">解析选项</div>
-                <el-select v-model="parsingOption" style="width: 100%;">
-                  <el-option label="简单文本" value="all_in_one" />
-                  <el-option label="结构化解析" value="structured" />
-                  <el-option label="提取表格" value="with_tables" />
-                  <el-option label="提取图像" value="with_images" />
-                  <el-option label="完整解析(表格+图像)" value="with_tables_and_images" />
-                </el-select>
-              </div>
+
 
               <div style="margin-top: 16px;">
                 <el-button type="primary" style="width: 100%;" @click="handleStartParse" :loading="processingParse"
                   :disabled="!selectedFile">
-                  解析文件
+                  智能解析文档
                 </el-button>
               </div>
 
@@ -95,8 +85,8 @@
                 style="margin-bottom: 16px; padding: 12px; border-radius: 4px; background-color: #f7f7f7; border: 1px solid #e4e7ed;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                   <h4 style="margin: 0 0 8px 0; font-size: 15px; font-weight: 500; color: #303133;">文档信息</h4>
-                  <el-button size="small" type="primary" icon="Download" @click="handleExportResult" v-if="parsedContent && parsedContent.content && parsedContent.content.length > 0">
-                    导出结果
+                  <el-button size="small" type="primary" icon="Download" @click="handleExportResult" v-if="parsedContent && filteredContent && filteredContent.length > 0">
+                    导出markdown
                   </el-button>
                 </div>
                 <div style="color: #606266; font-size: 14px; line-height: 1.6;">
@@ -111,7 +101,7 @@
                     </div>
                     <div class="doc-info-item">
                       <span class="info-label">内容数量:</span>
-                      <span class="info-value">{{ parsedContent.content?.length || 0 }} 项</span>
+                      <span class="info-value">{{ filteredContent?.length || 0 }} 项</span>
                     </div>
                     <div class="doc-info-item">
                       <span class="info-label">解析方法:</span>
@@ -120,6 +110,10 @@
                     <div class="doc-info-item">
                       <span class="info-label">处理时间:</span>
                       <span class="info-value">{{ parsedContent.metadata?.timestamp ? formatDate(parsedContent.metadata.timestamp) : 'N/A' }}</span>
+                    </div>
+                    <div class="doc-info-item" v-if="parsedContent.metadata?.marker_stats?.images_detected > 0">
+                      <span class="info-label">图片检测:</span>
+                      <span class="info-value">{{ parsedContent.metadata.marker_stats.images_detected }} 张图片已解析</span>
                     </div>
                   </div>
                 </div>
@@ -134,13 +128,20 @@
                   display: block !important;
                   min-height: 200px;
                 ">
+                <!-- Markdown显示模式切换 -->
+                <div v-if="hasMarkdownContent" class="markdown-mode-tabs" style="margin-bottom: 16px; border-bottom: 1px solid #e4e7ed; padding-bottom: 8px;">
+                  <el-radio-group v-model="markdownDisplayMode" size="small">
+                    <el-radio-button label="rendered">渲染视图</el-radio-button>
+                    <el-radio-button label="source">源码视图</el-radio-button>
+                  </el-radio-group>
+                </div>
                 <!-- 内容分页控件 -->
-                <div class="pagination-controls" v-if="parsedContent && parsedContent.content && parsedContent.content.length > pageSize">
+                <div class="pagination-controls" v-if="filteredContent && filteredContent.length > pageSize">
                   <el-pagination
                     v-model:current-page="currentPage"
                     :page-size="pageSize"
                     layout="prev, pager, next"
-                    :total="parsedContent.content.length"
+                    :total="filteredContent.length"
                     @current-change="handlePageChange"
                     class="pagination"
                   />
@@ -176,15 +177,25 @@
                       <div class="image-text-content">{{ item.content }}</div>
                       <div v-if="item.metadata" class="image-metadata">{{ item.metadata }}</div>
                     </div>
+                    <div v-else-if="item.type === 'markdown'" class="markdown-content">
+                      <!-- 渲染模式：显示格式化的markdown -->
+                      <div v-if="markdownDisplayMode === 'rendered'" class="markdown-rendered" v-html="renderMarkdown(item.content)"></div>
+                      <!-- 源码模式：显示原始markdown文本 -->
+                      <div v-else class="markdown-source">
+                        <pre class="markdown-code"><code>{{ item.content }}</code></pre>
+                      </div>
+                    </div>
                     <div v-else class="text-content">
                       {{ item.content }}
                     </div>
                     <div v-if="item.confidence !== undefined" class="confidence-indicator">
                       <div class="confidence-label">置信度:</div>
                       <el-progress 
-                        :percentage="item.confidence * 100" 
-                        :status="getConfidenceStatus(item.confidence)"
+                        :percentage="Math.round(item.confidence * 100)" 
+                        :color="getConfidenceColor(item.confidence)"
                         :stroke-width="8"
+                        :show-text="true"
+                        :format="(percentage) => `${percentage}%`"
                         class="confidence-bar"
                       />
                     </div>
@@ -197,12 +208,12 @@
                 </div>
                 
                 <!-- 空结果提示 -->
-                <div v-if="parsedContent && parsedContent.content && parsedContent.content.length === 0" class="empty-result">
-                  <el-empty description="没有找到解析结果">
+                <div v-if="parsedContent && (!filteredContent || filteredContent.length === 0)" class="empty-result">
+                  <el-empty description="没有找到markdown内容">
                     <template #description>
                       <div>
-                        <p>没有找到解析结果</p>
-                        <p class="empty-hint">请尝试更改解析选项或使用其他加载工具</p>
+                        <p>没有找到可显示的markdown内容</p>
+                        <p class="empty-hint">文档解析完成，但没有生成markdown格式的内容</p>
                       </div>
                     </template>
                   </el-empty>
@@ -264,7 +275,7 @@
                 </el-table-column>
                 <el-table-column label="解析方式" width="100" align="center">
                   <template #default="{ row }">
-                    {{ getParsingOptionText(row.metadata?.parsing_method || 'N/A') }}
+                    {{ row.metadata?.parsing_method || 'N/A' }}
                   </template>
                 </el-table-column>
                 <el-table-column label="创建时间" width="180" align="center">
@@ -331,7 +342,6 @@ const parsedContent = ref(null)
 const previewError = ref(false)
 const previewErrorMessage = ref('获取预览内容失败')
 const selectedFile = ref(null)
-const parsingOption = ref('all_in_one')
 const docName = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -341,6 +351,7 @@ const searchQuery = ref('')
 const loading = ref(false)
 const total = ref(0)
 const files = ref([]) // 存储已解析的文档列表
+const markdownDisplayMode = ref('rendered') // markdown显示模式：rendered（渲染）或 source（源码）
 
 // 过滤后的文件列表
 const filteredFiles = computed(() => {
@@ -381,54 +392,40 @@ const checkFileType = (file) => {
   
   // 支持的文件类型列表
   const supportedTypes = {
-    'pdf': '文档',
+    'pdf': 'PDF文档',
+    'doc': 'Word文档',
+    'docx': 'Word文档',
+    'pptx': 'PowerPoint',
+    'ppt': 'PowerPoint',
+    'xlsx': 'Excel表格',
+    'xls': 'Excel表格',
+    'html': '网页文件',
+    'htm': '网页文件',
+    'epub': '电子书',
     'md': 'Markdown',
-    'doc': 'Word',
-    'docx': 'Word',
-    'txt': '文本',
+    'txt': '文本文件',
     'jpg': '图片',
     'jpeg': '图片',
     'png': '图片',
     'bmp': '图片',
     'tiff': '图片',
-    'tif': '图片'
+    'tif': '图片',
+    'webp': '图片'
   }
   
   // 判断是否为支持的文件类型
   if (!supportedTypes[extension]) {
-    ElMessage.error(`不支持的文件类型：${extension}，请上传PDF、Markdown、Word、文本或图片文件`)
+    ElMessage.error(`不支持的文件类型：${extension}，请上传PDF、Word、PowerPoint、Excel、图片、网页或文本文件`)
     return false
   }
   
-  // 根据文件类型自动调整解析选项
-  if (extension === 'pdf' || extension === 'doc' || extension === 'docx') {
-    // 文档类型默认完整解析
-    parsingOption.value = 'with_tables_and_images'
-  } else if (extension === 'md' || extension === 'txt') {
-    // 纯文本类型默认结构化解析
-    parsingOption.value = 'structured'
-  } else if (['jpg', 'jpeg', 'png', 'bmp', 'tiff', 'tif'].includes(extension)) {
-    // 图片类型默认图像提取
-    parsingOption.value = 'with_images'
-  }
-  
   // 更新状态信息
-  parseStatus.value = `已选择${supportedTypes[extension]}文件，推荐使用${getParsingOptionText(parsingOption.value)}解析`
+  parseStatus.value = `已选择${supportedTypes[extension]}文件，将使用智能解析自动处理`
   
   return true
 }
 
-// 获取解析选项的文本描述
-const getParsingOptionText = (option) => {
-  const optionMap = {
-    'all_in_one': '简单文本',
-    'structured': '结构化解析',
-    'with_tables': '提取表格',
-    'with_images': '提取图像',
-    'with_tables_and_images': '完整解析'
-  }
-  return optionMap[option] || option
-}
+
 
 // 解析方法
 const handleStartParse = async () => {
@@ -447,7 +444,7 @@ const handleStartParse = async () => {
     // 构建FormData对象
     const formData = new FormData()
     formData.append('file', selectedFile.value)
-    formData.append('parsing_option', parsingOption.value)
+    formData.append('parsing_option', 'marker') // 统一使用marker智能解析
     
     // 发送API请求
     try {
@@ -503,6 +500,9 @@ const handleStartParse = async () => {
       processingParse.value = false
       isLoading.value = false
       
+      // 重置markdown显示模式为渲染模式
+      markdownDisplayMode.value = 'rendered'
+      
       // 3秒后清除成功状态并刷新文档列表
       setTimeout(() => {
         if (parseStatus.value === '解析处理完成') {
@@ -543,15 +543,33 @@ const getContentTypeText = (type) => {
   return typeMap[type] || type
 }
 
+// 检查是否有markdown内容
+const hasMarkdownContent = computed(() => {
+  if (!parsedContent.value || !parsedContent.value.content) {
+    return false
+  }
+  return parsedContent.value.content.some(item => item.type === 'markdown')
+})
+
+// 过滤后的内容（只显示markdown类型）
+const filteredContent = computed(() => {
+  if (!parsedContent.value || !parsedContent.value.content) {
+    return []
+  }
+  
+  // 只显示markdown类型的内容，过滤掉图片元数据等辅助信息
+  return parsedContent.value.content.filter(item => item.type === 'markdown')
+})
+
 // 处理分页逻辑
 const paginatedContent = computed(() => {
-  if (!parsedContent.value || !parsedContent.value.content) {
+  if (!filteredContent.value || filteredContent.value.length === 0) {
     return []
   }
   
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
-  return parsedContent.value.content.slice(start, end)
+  return filteredContent.value.slice(start, end)
 })
 
 // 处理页面切换
@@ -564,12 +582,12 @@ const handlePageChange = (page) => {
   }
 }
 
-// 获取置信度状态
-const getConfidenceStatus = (confidence) => {
-  if (confidence >= 0.8) return 'success'
-  if (confidence >= 0.6) return ''
-  if (confidence >= 0.4) return 'warning'
-  return 'exception'
+// 获取置信度颜色
+const getConfidenceColor = (confidence) => {
+  if (confidence >= 0.8) return '#67C23A'      // 绿色 - 高置信度
+  if (confidence >= 0.6) return '#409EFF'      // 蓝色 - 中等置信度  
+  if (confidence >= 0.4) return '#E6A23C'      // 黄色 - 低置信度
+  return '#F56C6C'                             // 红色 - 很低置信度
 }
 
 const handleCancel = () => {
@@ -647,16 +665,20 @@ const formatDate = (dateString) => {
 
 // 导出解析结果
 const handleExportResult = () => {
-  if (!parsedContent.value) {
-    ElMessage.warning('没有可导出的内容')
+  if (!filteredContent.value || filteredContent.value.length === 0) {
+    ElMessage.warning('没有可导出的markdown内容')
     return
   }
   
   try {
-    // 创建要导出的数据
+    // 创建要导出的数据（只导出markdown内容）
     const exportData = {
-      metadata: parsedContent.value.metadata,
-      content: parsedContent.value.content
+      metadata: {
+        ...parsedContent.value.metadata,
+        content_type: 'markdown_only',
+        exported_items: filteredContent.value.length
+      },
+      content: filteredContent.value
     }
     
     // 转换为JSON字符串
@@ -669,7 +691,7 @@ const handleExportResult = () => {
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${docName.value || 'document'}_parsed_result.json`
+    link.download = `${docName.value || 'document'}_markdown_content.json`
     
     // 触发下载
     document.body.appendChild(link)
@@ -712,6 +734,90 @@ const formatListContent = (content) => {
   return html;
 }
 
+// 渲染markdown内容
+const renderMarkdown = (content) => {
+  if (!content) return ''
+  
+  // 基本的markdown渲染（简单实现）
+  let rendered = content
+    // 标题
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // 粗体
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // 斜体
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    // 链接
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    // 图片（支持base64和路径）
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+      // 为图片添加加载错误处理和样式
+      const imgClass = src.startsWith('data:image/') ? 'markdown-base64-image' : 'markdown-file-image';
+      return `<img src="${src}" alt="${alt}" class="${imgClass}" style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" /><div style="display:none; padding: 8px; background-color: #f5f5f5; border: 1px dashed #ccc; border-radius: 4px; text-align: center; color: #999;">图片加载失败: ${alt}</div>`;
+    })
+    // 行内代码
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // 换行
+    .replace(/\n/g, '<br>')
+  
+  // 处理表格
+  if (rendered.includes('|')) {
+    const lines = rendered.split('<br>')
+    let inTable = false
+    let tableHtml = ''
+    let processedLines = []
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+      
+      if (line.includes('|') && !line.startsWith('<')) {
+        if (!inTable) {
+          inTable = true
+          tableHtml = '<table class="markdown-table"><thead>'
+        }
+        
+        // 跳过分隔行
+        if (line.replace(/[\|\-\s]/g, '') === '') continue
+        
+        const cells = line.split('|').slice(1, -1) // 去掉首尾的空元素
+        const isFirstRow = i === 0 || !inTable
+        
+        if (isFirstRow && inTable) {
+          tableHtml += '<tr>'
+          cells.forEach(cell => {
+            tableHtml += `<th>${cell.trim()}</th>`
+          })
+          tableHtml += '</tr></thead><tbody>'
+        } else {
+          tableHtml += '<tr>'
+          cells.forEach(cell => {
+            tableHtml += `<td>${cell.trim()}</td>`
+          })
+          tableHtml += '</tr>'
+        }
+      } else {
+        if (inTable) {
+          tableHtml += '</tbody></table>'
+          processedLines.push(tableHtml)
+          tableHtml = ''
+          inTable = false
+        }
+        processedLines.push(line)
+      }
+    }
+    
+    if (inTable) {
+      tableHtml += '</tbody></table>'
+      processedLines.push(tableHtml)
+    }
+    
+    rendered = processedLines.join('<br>')
+  }
+  
+  return rendered
+}
+
 // 复制内容到剪贴板
 const copyContent = (item) => {
   let content = '';
@@ -721,6 +827,16 @@ const copyContent = (item) => {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = formatTableContent(item.content);
     content = tempDiv.textContent || tempDiv.innerText || item.content;
+  } else if (item.type === 'markdown') {
+    // 对于markdown，根据当前显示模式复制对应内容
+    if (markdownDisplayMode.value === 'source') {
+      content = item.content; // 复制原始markdown源码
+    } else {
+      // 复制渲染后的纯文本（去除HTML标签）
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = renderMarkdown(item.content);
+      content = tempDiv.textContent || tempDiv.innerText || item.content;
+    }
   } else {
     content = item.content;
   }
@@ -802,6 +918,9 @@ const handleViewDocument = async (row) => {
     
     // 按页码排序内容
     parsedContent.value.content.sort((a, b) => a.page - b.page)
+    
+    // 重置markdown显示模式为渲染模式
+    markdownDisplayMode.value = 'rendered'
     
     ElMessage.success(`查看文档: ${row.metadata?.filename || row.name}`)
   } catch (error) {
@@ -1411,6 +1530,156 @@ const refreshDocumentList = () => {
   font-size: 13px;
   color: #909399;
   margin-top: 4px;
+}
+
+/* Markdown显示模式样式 */
+.markdown-mode-tabs {
+  display: flex;
+  justify-content: center;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.markdown-content {
+  margin: 12px 0;
+}
+
+.markdown-rendered {
+  line-height: 1.6;
+  color: #333;
+}
+
+.markdown-rendered h1 {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 16px 0 12px 0;
+  color: #2c3e50;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 8px;
+}
+
+.markdown-rendered h2 {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 14px 0 10px 0;
+  color: #34495e;
+  border-bottom: 1px solid #bdc3c7;
+  padding-bottom: 6px;
+}
+
+.markdown-rendered h3 {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 12px 0 8px 0;
+  color: #34495e;
+}
+
+.markdown-rendered strong {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
+.markdown-rendered em {
+  font-style: italic;
+  color: #7f8c8d;
+}
+
+.markdown-rendered code {
+  background-color: #f8f9fa;
+  color: #e83e8c;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9em;
+}
+
+.markdown-rendered a {
+  color: #3498db;
+  text-decoration: none;
+}
+
+.markdown-rendered a:hover {
+  text-decoration: underline;
+}
+
+.markdown-rendered img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 8px 0;
+}
+
+.markdown-base64-image {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  padding: 4px;
+  cursor: zoom-in;
+}
+
+.markdown-base64-image:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: scale(1.02);
+  transition: all 0.3s ease;
+}
+
+.markdown-file-image {
+  border: 1px solid #dee2e6;
+  background-color: #ffffff;
+}
+
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  background-color: white;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.markdown-table th {
+  background-color: #f8f9fa;
+  color: #2c3e50;
+  font-weight: 600;
+  padding: 12px;
+  text-align: left;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.markdown-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #dee2e6;
+  color: #495057;
+}
+
+.markdown-table tr:nth-child(even) td {
+  background-color: #f8f9fa;
+}
+
+.markdown-table tr:hover td {
+  background-color: #e9ecef;
+}
+
+.markdown-source {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.markdown-code {
+  background-color: #2d3748;
+  color: #e2e8f0;
+  padding: 16px;
+  margin: 0;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
 

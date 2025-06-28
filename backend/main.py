@@ -385,8 +385,8 @@ async def search_with_query_param(
         collection_id = body.get("collection_id", "")
         body_provider = body.get("provider", VectorDBProvider.MILVUS.value)
         top_k = body.get("top_k", 3)
-        threshold = body.get("threshold", 0.7)
-        word_count_threshold = body.get("word_count_threshold", 100)
+        threshold = body.get("threshold", 0.5)    # 相似度阈值默认50%
+        word_count_threshold = body.get("word_count_threshold", 30)    # 最小字数默认30
         save_results = body.get("save_results", False)
 
         # 优先使用URL中的提供商参数，其次是请求体中的提供商参数
@@ -726,7 +726,7 @@ async def delete_embedded_doc(doc_name: str):
 @app.post("/parse")
 async def parse_file(
     file: UploadFile = File(...),
-    parsing_option: str = Form(...),
+    parsing_option: str = Form("marker"),  # 默认使用marker，向后兼容
 ):
     try:
         # 创建临时目录，如果不存在
@@ -899,42 +899,37 @@ async def chunk_document(data: dict = Body(...)):
             }
             
         elif os.path.exists(parsed_file_path):
-            # 从parsed文档读取（新增功能）
+            # 从parsed文档读取（使用新的JSON分块方法）
             with open(parsed_file_path, "r", encoding="utf-8") as f:
                 doc_data = json.load(f)
             
-            # 转换parsed格式为page_map格式
-            page_map = []
-            for item in doc_data.get("content", []):
-                if item.get("content"):  # 确保有内容
-                    page_map.append({
-                        "page": item.get("page", 1),
-                        "text": item.get("content", "")
-                    })
-            
-            # 准备元数据
-            metadata = {
-                "filename": doc_data.get("metadata", {}).get("filename", doc_id),
-                "loading_method": doc_data.get("metadata", {}).get("parsing_method", "parsed"),
-                "total_pages": max([item.get("page", 1) for item in doc_data.get("content", [])]) if doc_data.get("content") else 1,
-            }
+            # 使用新的chunk_parsed_json方法，只处理markdown内容
+            chunking_service = ChunkingService()
+            result = chunking_service.chunk_parsed_json(
+                parsed_data=doc_data,
+                method=chunking_option,
+                chunk_size=chunk_size,
+                overlap_size=overlap_size,
+            )
             
         else:
             raise HTTPException(status_code=404, detail="Document not found in loaded or parsed directories")
 
-        # 检查是否有有效的页面映射
-        if not page_map:
-            raise HTTPException(status_code=400, detail="No valid content found for chunking")
+        # 对于loaded文档，使用旧的chunk_text方法
+        if os.path.exists(loaded_file_path):
+            # 检查是否有有效的页面映射
+            if not page_map:
+                raise HTTPException(status_code=400, detail="No valid content found for chunking")
 
-        chunking_service = ChunkingService()
-        result = chunking_service.chunk_text(
-            text="",  # 不需要传递文本，因为我们使用 page_map
-            method=chunking_option,
-            metadata=metadata,
-            page_map=page_map,
-            chunk_size=chunk_size,
-            overlap_size=overlap_size,
-        )
+            chunking_service = ChunkingService()
+            result = chunking_service.chunk_text(
+                text="",  # 不需要传递文本，因为我们使用 page_map
+                method=chunking_option,
+                metadata=metadata,
+                page_map=page_map,
+                chunk_size=chunk_size,
+                overlap_size=overlap_size,
+            )
 
         # 修复输出文件名以匹配前端期望的格式
         # 使用原始doc_id而不是从metadata获取的filename
@@ -1226,8 +1221,8 @@ async def search_with_path_param(provider: str, body: dict = Body(...)):
         query = body.get("query", "")
         collection_id = body.get("collection_id", "")
         top_k = body.get("top_k", 3)
-        threshold = body.get("threshold", 0.7)
-        word_count_threshold = body.get("word_count_threshold", 100)
+        threshold = body.get("threshold", 0.5)    # 相似度阈值默认50%
+        word_count_threshold = body.get("word_count_threshold", 30)    # 最小字数默认30
         save_results = body.get("save_results", False)
 
         # Log the incoming search request details
@@ -1279,3 +1274,24 @@ async def search_with_path_param(provider: str, body: dict = Body(...)):
     except Exception as e:
         logger.error(f"Error performing search: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    logger.info("=== Starting RAG Framework Backend ===")
+    logger.info("Server will start on http://0.0.0.0:8001")
+    
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=True,
+        log_level="info"
+    )

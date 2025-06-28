@@ -20,9 +20,14 @@ class ChunkingService:
     - fixed_size: 按固定大小分块
     - by_paragraphs: 按段落分块
     - by_sentences: 按句子分块
+    - by_semantic: 按语义相关性分块
+    
+    支持两种输入格式：
+    - 传统的text + page_map格式（使用chunk_text方法）
+    - JSON格式的解析结果（使用chunk_parsed_json方法，只处理type为'markdown'的内容）
     """
     
-    def chunk_text(self, text: str, method: str, metadata: dict, page_map: list = None, chunk_size: int = 1000, overlap_size: int = 50) -> dict:
+    def chunk_text(self, text: str, method: str, metadata: dict, page_map: list = None, chunk_size: int = 500, overlap_size: int = 50) -> dict:
         """
         将文本按指定方法分块
         
@@ -128,6 +133,161 @@ class ChunkingService:
             logger.error(f"Error in chunk_text: {str(e)}")
             raise
 
+    def chunk_parsed_json(self, parsed_data: dict, method: str, chunk_size: int = 500, overlap_size: int = 50) -> dict:
+        """
+        对JSON格式的解析结果进行分块，只处理type为'markdown'的内容
+        
+        Args:
+            parsed_data: JSON格式的解析结果，包含metadata和content字段
+            method: 分块方法，支持 'by_content', 'fixed_size', 'by_paragraphs', 'by_sentences', 'by_semantic'
+            chunk_size: 固定大小分块时的块大小
+            overlap_size: 固定大小分块时的重叠大小
+        Returns:
+            包含分块结果的文档数据结构
+        
+        Raises:
+            ValueError: 当输入数据格式不正确或分块方法不支持时
+        """
+        try:
+            # 验证输入数据格式
+            if not isinstance(parsed_data, dict):
+                raise ValueError("parsed_data must be a dictionary")
+            
+            if "content" not in parsed_data:
+                raise ValueError("parsed_data must contain 'content' field")
+            
+            metadata = parsed_data.get("metadata", {})
+            content_items = parsed_data.get("content", [])
+            
+            # 过滤出type为'markdown'的内容项
+            markdown_items = [item for item in content_items if item.get("type") == "markdown"]
+            
+            if not markdown_items:
+                logger.warning("No markdown content found in parsed data")
+                # 返回空的文档数据结构
+                return {
+                    "filename": metadata.get("filename", ""),
+                    "total_chunks": 0,
+                    "total_pages": metadata.get("total_pages", 0),
+                    "loading_method": metadata.get("parsing_method", "marker"),
+                    "chunking_method": method,
+                    "timestamp": datetime.now().isoformat(),
+                    "chunks": []
+                }
+            
+            chunks = []
+            
+            if method == "by_content":
+                # 直接使用每个markdown内容项作为一个chunk
+                for idx, item in enumerate(markdown_items, 1):
+                    content = item.get("content", "")
+                    # 获取页面信息，如果没有则使用默认值
+                    page_num = item.get("page", 1)
+                    chunk_metadata = {
+                        "chunk_id": idx,
+                        "source_item_index": content_items.index(item),  # 在原始内容中的索引
+                        "page_number": page_num,  # 添加页面编号
+                        "page_range": str(page_num),  # 添加页面范围
+                        "word_count": len(content.split()),
+                        "confidence": item.get("confidence")  # 保留置信度信息
+                    }
+                    chunks.append({
+                        "content": content,
+                        "metadata": chunk_metadata
+                    })
+            
+            elif method == "fixed_size":
+                # 对每个markdown内容项进行固定大小分块
+                for item in markdown_items:
+                    content = item.get("content", "")
+                    if not content.strip():
+                        continue
+                    
+                    page_num = item.get("page", 1)  # 获取页面信息
+                    content_chunks = self._fixed_size_chunks(content, chunk_size, overlap_size)
+                    for chunk in content_chunks:
+                        chunk_metadata = {
+                            "chunk_id": len(chunks) + 1,
+                            "source_item_index": content_items.index(item),
+                            "page_number": page_num,  # 添加页面编号
+                            "page_range": str(page_num),  # 添加页面范围
+                            "word_count": len(chunk["text"].split()),
+                            "confidence": item.get("confidence")
+                        }
+                        chunks.append({
+                            "content": chunk["text"],
+                            "metadata": chunk_metadata
+                        })
+            
+            elif method in ["by_paragraphs", "by_sentences"]:
+                # 对每个markdown内容项进行段落或句子分块
+                splitter_method = self._paragraph_chunks if method == "by_paragraphs" else self._sentence_chunks
+                for item in markdown_items:
+                    content = item.get("content", "")
+                    if not content.strip():
+                        continue
+                    
+                    page_num = item.get("page", 1)  # 获取页面信息
+                    content_chunks = splitter_method(content)
+                    for chunk in content_chunks:
+                        chunk_metadata = {
+                            "chunk_id": len(chunks) + 1,
+                            "source_item_index": content_items.index(item),
+                            "page_number": page_num,  # 添加页面编号
+                            "page_range": str(page_num),  # 添加页面范围
+                            "word_count": len(chunk["text"].split()),
+                            "confidence": item.get("confidence")
+                        }
+                        chunks.append({
+                            "content": chunk["text"],
+                            "metadata": chunk_metadata
+                        })
+            
+            elif method == "by_semantic":
+                # 按语义分块
+                for item in markdown_items:
+                    content = item.get("content", "")
+                    if not content.strip():
+                        continue
+                    
+                    page_num = item.get("page", 1)  # 获取页面信息
+                    content_chunks = self._semantic_chunks(content, chunk_size, overlap_size)
+                    for chunk in content_chunks:
+                        chunk_metadata = {
+                            "chunk_id": len(chunks) + 1,
+                            "source_item_index": content_items.index(item),
+                            "page_number": page_num,  # 添加页面编号
+                            "page_range": str(page_num),  # 添加页面范围
+                            "word_count": len(chunk["text"].split()),
+                            "confidence": item.get("confidence")
+                        }
+                        chunks.append({
+                            "content": chunk["text"],
+                            "metadata": chunk_metadata
+                        })
+            else:
+                raise ValueError(f"Unsupported chunking method: {method}")
+
+            # 创建标准化的文档数据结构
+            document_data = {
+                "filename": metadata.get("filename", ""),
+                "total_chunks": len(chunks),
+                "total_pages": metadata.get("total_pages", 0),
+                "total_markdown_items": len(markdown_items),
+                "total_content_items": len(content_items),
+                "loading_method": metadata.get("parsing_method", "marker"),
+                "chunking_method": method,
+                "timestamp": datetime.now().isoformat(),
+                "chunks": chunks
+            }
+            
+            logger.info(f"Successfully chunked {len(markdown_items)} markdown items into {len(chunks)} chunks using method '{method}'")
+            return document_data
+            
+        except Exception as e:
+            logger.error(f"Error in chunk_parsed_json: {str(e)}")
+            raise
+
     def _fixed_size_chunks(self, text: str, chunk_size: int, overlap_size: int) -> list[dict]:
         """
         将文本按固定大小分块，使用RecursiveCharacterTextSplitter实现
@@ -168,8 +328,8 @@ class ChunkingService:
         text_splitter = RecursiveCharacterTextSplitter(
             # 只使用段落相关的分隔符，这样确保只在段落处分割
             separators=["\n\n", "\n\r\n", "\r\n\r\n", "\n\n\n"],
-            # 设置较大的块大小，确保段落通常不会被进一步分割
-            chunk_size=2000,
+            # 设置适中的块大小，确保能够分割较短的文档
+            chunk_size=500,  # 从2000降低到500，确保能分割短文档
             chunk_overlap=0,  # 段落间通常不需要重叠
             length_function=len,
         )
@@ -191,14 +351,14 @@ class ChunkingService:
             分块后的句子列表
         """
         splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
+            chunk_size=300,  # 从1000降低到300，确保能分割短文档
+            chunk_overlap=50,  # 相应调整重叠大小
             separators=["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""],
         )
         texts = splitter.split_text(text)
         return [{"text": t} for t in texts]
 
-    def _semantic_chunks(self, text: str, chunk_size: int = 1000, overlap_size: int = 50) -> list[dict]:
+    def _semantic_chunks(self, text: str, chunk_size: int = 500, overlap_size: int = 50) -> list[dict]:
         """
         将文本按语义相关性分块，使用SemanticSplitterNodeParser实现
         
@@ -231,9 +391,11 @@ class ChunkingService:
                 embed_model=embed_model  # 使用HuggingFace嵌入模型
             )
             
-            # 分割文本
+            # 分割文本 - 需要先创建Document对象
+            from llama_index.core import Document
+            doc = Document(text=text)
             nodes = semantic_splitter.get_nodes_from_documents(
-                [text]
+                [doc]
             )
             
             # 从节点中提取文本并转换为所需的输出格式

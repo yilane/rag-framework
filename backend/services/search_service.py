@@ -216,8 +216,8 @@ class SearchService:
                    query: str, 
                    collection_id: str, 
                    top_k: int = 3, 
-                   threshold: float = 0.7,
-                   word_count_threshold: int = 20,
+                   threshold: float = 0.5,    # 相似度阈值默认50%
+                   word_count_threshold: int = 30,    # 最小字数默认30
                    save_results: bool = False) -> Dict[str, Any]:
         """
         执行向量搜索
@@ -306,8 +306,8 @@ class SearchService:
                           query: str, 
                           collection_id: str, 
                           top_k: int = 3, 
-                          threshold: float = 0.7,
-                          word_count_threshold: int = 20,
+                          threshold: float = 0.5,    # 相似度阈值默认50%
+                          word_count_threshold: int = 30,    # 最小字数默认30
                           save_results: bool = False) -> Dict[str, Any]:
         """
         在Milvus中执行向量搜索
@@ -465,8 +465,8 @@ class SearchService:
                           query: str, 
                           collection_id: str, 
                           top_k: int = 3, 
-                          threshold: float = 0.7,
-                          word_count_threshold: int = 20,
+                          threshold: float = 0.5,    # 相似度阈值默认50%
+                          word_count_threshold: int = 30,    # 最小字数默认30
                           save_results: bool = False) -> Dict[str, Any]:
         """
         在Chroma中执行向量搜索
