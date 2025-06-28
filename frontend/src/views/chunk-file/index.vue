@@ -42,11 +42,11 @@
                   <el-option label="按语义" value="by_semantic" />
                 </el-select>
                 
-                <div v-if="chunkConfig.mode === 'fixed_size'">
+                <div v-if="chunkConfig.mode === 'fixed_size' || chunkConfig.mode === 'by_semantic'">
                   <div style="margin-bottom: 8px; font-size: 14px; color: #606266;">分块大小</div>
                   <el-input-number 
                     v-model="chunkConfig.chunkSize" 
-                    :min="1000" 
+                    :min="100" 
                     :max="5000"
                     :step="100"
                     placeholder="请输入分块大小"
@@ -59,7 +59,7 @@
                   <el-input-number 
                     v-model="chunkConfig.overlapSize" 
                     :min="0" 
-                    :max="100"
+                    :max="500"
                     :step="10"
                     placeholder="请输入重叠大小"
                     style="width: 100%; margin-bottom: 16px;"
@@ -132,7 +132,7 @@
                     <p style="margin: 4px 0;">页数: {{ loadedContent.pageCount || 'N/A' }}</p>
                     <p style="margin: 4px 0;">分块数: {{ loadedContent.chunkCount || 'N/A' }}</p>
                     <p style="margin: 4px 0;">加载方法: {{ loadedContent.loadingMethod || 'N/A' }}</p>
-                    <p style="margin: 4px 0;">分块方法: {{ loadedContent.mode || 'N/A' }}</p>
+                    <p style="margin: 4px 0;">分块方法: {{ getModeName(loadedContent.mode) || 'N/A' }}</p>
                     <p style="margin: 4px 0;">处理时间: {{ loadedContent.timestamp ? new Date(loadedContent.timestamp).toLocaleString() : 'N/A' }}</p>
                   </div>
                 </div>
@@ -207,7 +207,7 @@
                     <div class="text-sm text-gray-600 mt-2">
                       <p class="py-1">页数: {{loadedContent.pageCount || 'N/A'}}</p>
                       <p class="py-1">分块数: {{loadedContent.chunkCount || 'N/A'}}</p>
-                      <p class="py-1">分块方法: {{loadedContent.mode || 'N/A'}}</p>
+                      <p class="py-1">分块方法: {{getModeName(loadedContent.mode) || 'N/A'}}</p>
                       <p class="py-1">加载方法: {{loadedContent.loadingMethod || 'N/A'}}</p>
                       <p class="py-1">处理时间: {{loadedContent.timestamp ? new Date(loadedContent.timestamp).toLocaleString() : 'N/A'}}</p>
                     </div>
@@ -253,8 +253,8 @@
                   </template>
                 </el-table-column>
                 <el-table-column prop="pages" label="页数" width="80" align="center" />
-                <el-table-column prop="chunks" label="块数" width="80" align="center" />
-                <el-table-column prop="mode" label="处理方式" width="100" align="center">
+                <el-table-column prop="chunks" label="分块数" width="80" align="center" />
+                <el-table-column prop="mode" label="分块方法" width="100" align="center">
                   <template #default="{ row }">
                     {{ getModeName(row.mode) }}
                   </template>
@@ -339,7 +339,7 @@ const maxLogs = 10 // 最大保存的日志数量
 // 分块配置
 const chunkConfig = ref({
   selectedDoc: '',
-  chunkSize: 1000,
+  chunkSize: 500,
   overlapSize: 50,
   mode: 'by_pages' // 默认值从by_paragraph更改为by_pages
 })
@@ -375,6 +375,7 @@ const getModeName = (mode) => {
     by_pages: '按页分块',
     by_paragraphs: '按段落',
     by_sentences: '按句子',
+    by_semantic: '按语义',
     fixed_size: '固定大小'
   }
   return modes[mode] || mode
@@ -578,8 +579,8 @@ const handleStartChunk = async () => {
       chunking_option: chunkConfig.value.mode
     }
     
-    if (chunkConfig.value.mode === 'fixed_size') {
-      params.chunk_size = chunkConfig.value.chunkSize || 1000
+    if (chunkConfig.value.mode === 'fixed_size' || chunkConfig.value.mode === 'by_semantic') {
+      params.chunk_size = chunkConfig.value.chunkSize || 500
       params.overlap_size = chunkConfig.value.overlapSize || 0
     }
     
@@ -922,9 +923,9 @@ onMounted(() => {
 
 // 监听分块方法变化，仅在特定模式下显示分块大小输入
 watch(() => chunkConfig.value.mode, (newMode) => {
-  if (newMode === 'fixed_size') {
-    // 为固定大小模式设置默认值
-    chunkConfig.value.chunkSize = 1000
+  if (newMode === 'fixed_size' || newMode === 'by_semantic') {
+    // 为固定大小和按语义模式设置默认值
+    chunkConfig.value.chunkSize = 500
   }
 })
 </script>

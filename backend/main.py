@@ -70,7 +70,7 @@ async def process_file(
     try:
         # 创建临时目录（如果不存在）
         os.makedirs("temp", exist_ok=True)
-        
+
         # 保存上传的文件
         temp_path = os.path.join("temp", file.filename)
         with open(temp_path, "wb") as buffer:
@@ -206,28 +206,34 @@ async def embed_document(data: dict = Body(...)):
                 # 跳过没有内容的项
                 if not item.get("content"):
                     continue
-                
+
                 chunk = {
                     "content": item.get("content", ""),
                     "metadata": {
                         "chunk_id": idx + 1,
-                        "page_number": item.get("page", 1), 
+                        "page_number": item.get("page", 1),
                         "page_range": str(item.get("page", 1)),
-                        "word_count": len(item.get("content", "").split()) if item.get("content") else 0
-                    }
+                        "word_count": (
+                            len(item.get("content", "").split())
+                            if item.get("content")
+                            else 0
+                        ),
+                    },
                 }
                 chunks.append(chunk)
-            
+
             # 如果没有有效的内容块，抛出异常
             if not chunks:
-                raise HTTPException(status_code=400, detail="No valid content found in the document")
-                
+                raise HTTPException(
+                    status_code=400, detail="No valid content found in the document"
+                )
+
             # 计算文档的总页数（取最大页码）
             max_page = 1
             for item in doc_data.get("content", []):
                 if item.get("page", 1) > max_page:
                     max_page = item.get("page", 1)
-            
+
             input_data = {
                 "chunks": chunks,
                 "metadata": {
@@ -235,8 +241,10 @@ async def embed_document(data: dict = Body(...)):
                     "total_chunks": len(chunks),
                     "total_pages": max_page,
                     "loading_method": "unstructured",
-                    "chunking_method": doc_data.get("metadata", {}).get("parsing_method", "parsed"),
-                }
+                    "chunking_method": doc_data.get("metadata", {}).get(
+                        "parsing_method", "parsed"
+                    ),
+                },
             }
         else:
             # 已加载和已分块文档的原有处理方式
@@ -311,7 +319,7 @@ async def list_embedded_docs():
 
         # 按时间戳倒序排序（最新的排在前面）
         documents.sort(key=lambda x: x.get("_timestamp_for_sorting", ""), reverse=True)
-        
+
         # 移除用于排序的临时字段
         for doc in documents:
             if "_timestamp_for_sorting" in doc:
@@ -385,8 +393,8 @@ async def search_with_query_param(
         collection_id = body.get("collection_id", "")
         body_provider = body.get("provider", VectorDBProvider.MILVUS.value)
         top_k = body.get("top_k", 3)
-        threshold = body.get("threshold", 0.5)    # 相似度阈值默认50%
-        word_count_threshold = body.get("word_count_threshold", 30)    # 最小字数默认30
+        threshold = body.get("threshold", 0.5)  # 相似度阈值默认50%
+        word_count_threshold = body.get("word_count_threshold", 30)  # 最小字数默认30
         save_results = body.get("save_results", False)
 
         # 优先使用URL中的提供商参数，其次是请求体中的提供商参数
@@ -511,11 +519,17 @@ async def get_documents(type: str = Query("all")):
                                     "metadata": {
                                         "total_pages": doc_data.get("total_pages"),
                                         "total_chunks": doc_data.get("total_chunks"),
-                                        "loading_method": doc_data.get("loading_method"),
-                                        "chunking_method": doc_data.get("chunking_method"),
+                                        "loading_method": doc_data.get(
+                                            "loading_method"
+                                        ),
+                                        "chunking_method": doc_data.get(
+                                            "chunking_method"
+                                        ),
                                         "timestamp": doc_data.get("timestamp"),
                                     },
-                                    "_timestamp_for_sorting": doc_data.get("timestamp", ""),  # 添加排序字段
+                                    "_timestamp_for_sorting": doc_data.get(
+                                        "timestamp", ""
+                                    ),  # 添加排序字段
                                 }
                             )
 
@@ -536,11 +550,17 @@ async def get_documents(type: str = Query("all")):
                                     "metadata": {
                                         "total_pages": doc_data.get("total_pages"),
                                         "total_chunks": doc_data.get("total_chunks"),
-                                        "loading_method": doc_data.get("loading_method"),
-                                        "chunking_method": doc_data.get("chunking_method"),
+                                        "loading_method": doc_data.get(
+                                            "loading_method"
+                                        ),
+                                        "chunking_method": doc_data.get(
+                                            "chunking_method"
+                                        ),
                                         "timestamp": doc_data.get("timestamp"),
                                     },
-                                    "_timestamp_for_sorting": doc_data.get("timestamp", ""),  # 添加排序字段
+                                    "_timestamp_for_sorting": doc_data.get(
+                                        "timestamp", ""
+                                    ),  # 添加排序字段
                                 },
                             )
 
@@ -564,22 +584,26 @@ async def get_documents(type: str = Query("all")):
                                         "filename": metadata.get("filename"),
                                         "filetype": metadata.get("filetype"),
                                         "filesize": metadata.get("filesize"),
-                                        "total_elements": metadata.get("total_elements"),
-                                        "parsing_method": metadata.get("parsing_method"),
+                                        "total_elements": metadata.get(
+                                            "total_elements"
+                                        ),
+                                        "parsing_method": metadata.get(
+                                            "parsing_method"
+                                        ),
                                         "timestamp": timestamp,
                                     },
                                     "_timestamp_for_sorting": timestamp,  # 添加排序字段
                                 }
                             )
-        
+
         # 按时间戳倒序排序（最新的排在前面）
         documents.sort(key=lambda x: x.get("_timestamp_for_sorting", ""), reverse=True)
-        
+
         # 移除用于排序的临时字段
         for doc in documents:
             if "_timestamp_for_sorting" in doc:
                 del doc["_timestamp_for_sorting"]
-                            
+
         return {"documents": documents}
     except Exception as e:
         logger.error(f"Error getting documents: {str(e)}")
@@ -731,7 +755,7 @@ async def parse_file(
     try:
         # 创建临时目录，如果不存在
         os.makedirs("temp", exist_ok=True)
-        
+
         # 保存上传的文件
         temp_path = os.path.join("temp", file.filename)
         with open(temp_path, "wb") as buffer:
@@ -749,9 +773,7 @@ async def parse_file(
         # 使用新的ParsingService直接解析文档
         parsing_service = ParsingService()
         parsed_content = parsing_service.parse_document(
-            file_path=temp_path,
-            method=parsing_option,
-            metadata=metadata
+            file_path=temp_path, method=parsing_option, metadata=metadata
         )
 
         # 清理临时文件
@@ -762,12 +784,10 @@ async def parse_file(
         logger.error(f"Error parsing file: {str(e)}")
         # 记录详细错误信息，便于调试
         import traceback
+
         logger.error(traceback.format_exc())
-        
-        raise HTTPException(
-            status_code=500,
-            detail=f"文件解析失败: {str(e)}"
-        )
+
+        raise HTTPException(status_code=500, detail=f"文件解析失败: {str(e)}")
 
 
 @app.post("/load")
@@ -875,11 +895,11 @@ async def chunk_document(data: dict = Body(...)):
         # 首先尝试从01-loaded-docs读取文档
         loaded_file_path = os.path.join("01-loaded-docs", doc_id)
         parsed_file_path = os.path.join("01-parsed-docs", doc_id)
-        
+
         doc_data = None
         page_map = []
         metadata = {}
-        
+
         if os.path.exists(loaded_file_path):
             # 从loaded文档读取（原有逻辑）
             with open(loaded_file_path, "r", encoding="utf-8") as f:
@@ -897,12 +917,12 @@ async def chunk_document(data: dict = Body(...)):
                 "loading_method": doc_data["loading_method"],
                 "total_pages": doc_data["total_pages"],
             }
-            
+
         elif os.path.exists(parsed_file_path):
             # 从parsed文档读取（使用新的JSON分块方法）
             with open(parsed_file_path, "r", encoding="utf-8") as f:
                 doc_data = json.load(f)
-            
+
             # 使用新的chunk_parsed_json方法，只处理markdown内容
             chunking_service = ChunkingService()
             result = chunking_service.chunk_parsed_json(
@@ -911,15 +931,20 @@ async def chunk_document(data: dict = Body(...)):
                 chunk_size=chunk_size,
                 overlap_size=overlap_size,
             )
-            
+
         else:
-            raise HTTPException(status_code=404, detail="Document not found in loaded or parsed directories")
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found in loaded or parsed directories",
+            )
 
         # 对于loaded文档，使用旧的chunk_text方法
         if os.path.exists(loaded_file_path):
             # 检查是否有有效的页面映射
             if not page_map:
-                raise HTTPException(status_code=400, detail="No valid content found for chunking")
+                raise HTTPException(
+                    status_code=400, detail="No valid content found for chunking"
+                )
 
             chunking_service = ChunkingService()
             result = chunking_service.chunk_text(
@@ -936,23 +961,23 @@ async def chunk_document(data: dict = Body(...)):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         base_name = doc_id.replace(".json", "")
         expected_output_file = f"{base_name}_{chunking_option}_{timestamp}.json"
-        
+
         # 更新result中的filename和output_file以匹配前端期望
         result["filename"] = doc_id
         result["output_file"] = expected_output_file
-        
+
         # 使用chunking_service的save_document方法保存结果
         filepath = chunking_service.save_document(document_data=result)
-        
+
         # 读取保存的文档以返回
         with open(filepath, "r", encoding="utf-8") as f:
             document_data = json.load(f)
 
         return {
-            "loaded_content": document_data, 
+            "loaded_content": document_data,
             "filepath": filepath,
             "output_file": expected_output_file,
-            "chunked_doc_id": expected_output_file
+            "chunked_doc_id": expected_output_file,
         }
     except Exception as e:
         logger.error(f"Error chunking document: {str(e)}")
@@ -1221,8 +1246,8 @@ async def search_with_path_param(provider: str, body: dict = Body(...)):
         query = body.get("query", "")
         collection_id = body.get("collection_id", "")
         top_k = body.get("top_k", 3)
-        threshold = body.get("threshold", 0.5)    # 相似度阈值默认50%
-        word_count_threshold = body.get("word_count_threshold", 30)    # 最小字数默认30
+        threshold = body.get("threshold", 0.5)  # 相似度阈值默认50%
+        word_count_threshold = body.get("word_count_threshold", 30)  # 最小字数默认30
         save_results = body.get("save_results", False)
 
         # Log the incoming search request details
@@ -1284,14 +1309,8 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     logger.info("=== Starting RAG Framework Backend ===")
-    logger.info("Server will start on http://0.0.0.0:8001")
-    
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8001,
-        reload=True,
-        log_level="info"
-    )
+    logger.info("Server will start on http://0.0.0.0:8003")
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8003, reload=True, log_level="info")
