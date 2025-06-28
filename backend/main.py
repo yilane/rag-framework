@@ -31,7 +31,11 @@ from fastapi.responses import JSONResponse
 
 # 设置日志
 os.makedirs("logs", exist_ok=True)
-app = FastAPI()
+app = FastAPI(
+    title="RAG框架后端API",
+    description="用于文档处理、向量化、搜索和生成的完整RAG系统",
+    version="1.0.0"
+)
 
 # 确保必要的目录存在
 os.makedirs("temp", exist_ok=True)
@@ -67,6 +71,20 @@ async def process_file(
     chunking_option: str = Form(...),
     chunk_size: int = Form(1000),
 ):
+    """
+    处理上传的文件（PDF等）
+    
+    功能：上传文件并进行加载和分块处理
+    
+    参数：
+    - file: 上传的文件（支持PDF等格式）
+    - loading_method: 加载方法（如pymupdf、pdfplumber等）
+    - chunking_option: 分块选项（如semantic、fixed_size等）
+    - chunk_size: 分块大小（默认1000字符）
+    
+    返回：
+    - chunks: 分块后的文档内容列表
+    """
     try:
         # 创建临时目录（如果不存在）
         os.makedirs("temp", exist_ok=True)
@@ -112,6 +130,21 @@ async def process_file(
 
 @app.post("/save")
 async def save_chunks(data: dict):
+    """
+    保存分块后的文档
+    
+    功能：将处理后的文档块保存到01-chunked-docs目录
+    
+    参数：
+    - docName: 文档名称
+    - chunks: 文档块列表
+    - metadata: 元数据信息
+    
+    返回：
+    - status: 保存状态
+    - message: 状态消息
+    - filepath: 保存的文件路径
+    """
     try:
         doc_name = data.get("docName")
         chunks = data.get("chunks")
@@ -146,6 +179,14 @@ async def save_chunks(data: dict):
 
 @app.get("/list-docs")
 async def list_documents():
+    """
+    获取已分块文档列表
+    
+    功能：列出01-chunked-docs目录中的所有已保存文档
+    
+    返回：
+    - documents: 文档列表，包含id和name
+    """
     try:
         docs = []
         docs_dir = "01-chunked-docs"
@@ -163,6 +204,22 @@ async def list_documents():
 
 @app.post("/embed")
 async def embed_document(data: dict = Body(...)):
+    """
+    对文档进行向量化嵌入
+    
+    功能：使用指定的嵌入模型对文档进行向量化处理
+    
+    参数：
+    - documentId: 文档ID
+    - provider: 嵌入服务提供商（如openai、huggingface等）
+    - model: 嵌入模型名称
+    
+    返回：
+    - status: 处理状态
+    - message: 状态消息
+    - filepath: 嵌入文件保存路径
+    - embeddings: 生成的向量嵌入
+    """
     try:
         doc_id = data.get("documentId")
         provider = data.get("provider")
@@ -279,7 +336,16 @@ async def embed_document(data: dict = Body(...)):
 
 @app.get("/list-embedded")
 async def list_embedded_docs():
-    """List all embedded documents"""
+    """
+    获取已嵌入文档列表
+    
+    功能：列出02-embedded-docs目录中的所有已向量化文档
+    
+    返回：
+    - documents: 嵌入文档列表，包含名称和元数据信息
+      - name: 文件名
+      - metadata: 包含嵌入模型、提供商、时间戳等信息
+    """
     try:
         documents = []
         embedded_dir = "02-embedded-docs"
@@ -334,6 +400,19 @@ async def list_embedded_docs():
 
 @app.post("/index")
 async def index_embeddings(data: dict):
+    """
+    将向量嵌入索引到向量数据库
+    
+    功能：将生成的向量嵌入存储到指定的向量数据库中
+    
+    参数：
+    - fileId: 嵌入文件ID
+    - vectorDb: 向量数据库类型（如milvus、chroma等）
+    - indexMode: 索引模式
+    
+    返回：
+    - 索引操作结果信息
+    """
     try:
         file_id = data.get("fileId")
         vector_db = data.get("vectorDb")
@@ -358,7 +437,14 @@ async def index_embeddings(data: dict):
 
 @app.get("/providers")
 async def get_providers():
-    """获取支持的向量数据库列表"""
+    """
+    获取支持的向量数据库提供商列表
+    
+    功能：返回系统支持的所有向量数据库类型
+    
+    返回：
+    - providers: 支持的向量数据库提供商列表
+    """
     try:
         search_service = SearchService()
         providers = search_service.get_providers()
@@ -372,7 +458,17 @@ async def get_providers():
 async def get_collections(
     provider: VectorDBProvider = Query(default=VectorDBProvider.MILVUS),
 ):
-    """获取指定向量数据库中的集合"""
+    """
+    获取指定向量数据库中的集合列表
+    
+    功能：列出指定向量数据库中的所有集合
+    
+    参数：
+    - provider: 向量数据库提供商（默认为MILVUS）
+    
+    返回：
+    - collections: 集合列表
+    """
     try:
         search_service = SearchService()
         collections = search_service.list_collections(provider.value)
@@ -386,7 +482,23 @@ async def get_collections(
 async def search_with_query_param(
     body: dict = Body(...), provider: str = Query(None)  # 添加URL查询参数
 ):
-    """通过查询参数执行向量搜索"""
+    """
+    执行向量相似性搜索（通过查询参数）
+    
+    功能：在指定的向量数据库集合中执行相似性搜索
+    
+    参数：
+    - query: 搜索查询文本
+    - collection_id: 集合ID
+    - provider: 向量数据库提供商（可通过URL参数传递）
+    - top_k: 返回结果数量（默认3）
+    - threshold: 相似度阈值（默认0.5）
+    - word_count_threshold: 最小字数阈值（默认30）
+    - save_results: 是否保存搜索结果（默认false）
+    
+    返回：
+    - results: 搜索结果列表，包含文本内容、元数据和相似度分数
+    """
     try:
         # 从请求体中提取参数
         query = body.get("query", "")
@@ -458,7 +570,17 @@ async def search_with_query_param(
 
 @app.get("/collections/{provider}")
 async def get_provider_collections(provider: str):
-    """Get collections for a specific vector database provider"""
+    """
+    获取特定向量数据库提供商的集合列表
+    
+    功能：获取指定提供商下的所有可用集合
+    
+    参数：
+    - provider: 向量数据库提供商名称
+    
+    返回：
+    - collections: 该提供商下的集合列表
+    """
     try:
         vector_store_service = VectorStoreService()
         collections = vector_store_service.list_collections(provider)
@@ -470,7 +592,18 @@ async def get_provider_collections(provider: str):
 
 @app.get("/collections/{provider}/{collection_name}")
 async def get_collection_info(provider: str, collection_name: str):
-    """Get detailed information about a specific collection"""
+    """
+    获取特定集合的详细信息
+    
+    功能：获取指定集合的元数据和统计信息
+    
+    参数：
+    - provider: 向量数据库提供商名称
+    - collection_name: 集合名称
+    
+    返回：
+    - 集合的详细信息，包括文档数量、维度等
+    """
     try:
         vector_store_service = VectorStoreService()
         info = vector_store_service.get_collection_info(provider, collection_name)
@@ -482,7 +615,18 @@ async def get_collection_info(provider: str, collection_name: str):
 
 @app.delete("/collections/{provider}/{collection_name}")
 async def delete_collection(provider: str, collection_name: str):
-    """Delete a specific collection"""
+    """
+    删除指定的集合
+    
+    功能：从向量数据库中删除指定的集合及其所有数据
+    
+    参数：
+    - provider: 向量数据库提供商名称
+    - collection_name: 要删除的集合名称
+    
+    返回：
+    - message: 删除操作结果消息
+    """
     try:
         vector_store_service = VectorStoreService()
         success = vector_store_service.delete_collection(provider, collection_name)
@@ -499,6 +643,17 @@ async def delete_collection(provider: str, collection_name: str):
 
 @app.get("/documents")
 async def get_documents(type: str = Query("all")):
+    """
+    获取不同阶段的文档列表
+    
+    功能：获取loaded、chunked、parsed等不同处理阶段的文档
+    
+    参数：
+    - type: 文档类型（all/loaded/chunked/parsed，默认为all）
+    
+    返回：
+    - documents: 文档列表，包含ID、名称、类型和元数据
+    """
     try:
         documents = []
 
@@ -612,6 +767,18 @@ async def get_documents(type: str = Query("all")):
 
 @app.get("/documents/{doc_name}")
 async def get_document(doc_name: str, type: str = Query("loaded")):
+    """
+    获取特定文档的详细内容
+    
+    功能：读取并返回指定文档的完整内容和元数据
+    
+    参数：
+    - doc_name: 文档名称
+    - type: 文档类型（loaded/chunked/parsed，默认为loaded）
+    
+    返回：
+    - 文档的完整内容和元数据信息
+    """
     try:
 
         base_name = doc_name.replace(".json", "")
@@ -647,6 +814,19 @@ async def get_document(doc_name: str, type: str = Query("loaded")):
 
 @app.delete("/documents/{doc_name}")
 async def delete_document(doc_name: str, type: str = Query("loaded")):
+    """
+    删除指定的文档
+    
+    功能：从指定目录中删除文档文件
+    
+    参数：
+    - doc_name: 要删除的文档名称
+    - type: 文档类型（loaded/chunked/parsed，默认为loaded）
+    
+    返回：
+    - status: 删除状态
+    - message: 操作结果消息
+    """
     try:
         # 移除已有的 .json 扩展名（如果有）然后添加一个
         base_name = doc_name.replace(".json", "")
@@ -685,7 +865,17 @@ async def delete_document(doc_name: str, type: str = Query("loaded")):
 
 @app.get("/embedded-docs/{doc_name}")
 async def get_embedded_doc(doc_name: str):
-    """Get specific embedded document"""
+    """
+    获取特定嵌入文档的详细内容
+    
+    功能：读取并返回指定嵌入文档的向量和元数据
+    
+    参数：
+    - doc_name: 嵌入文档名称
+    
+    返回：
+    - embeddings: 向量嵌入列表，包含向量数据和元数据
+    """
     try:
         logger.info(f"Attempting to read document: {doc_name}")
         file_path = os.path.join("02-embedded-docs", doc_name)
@@ -732,7 +922,17 @@ async def get_embedded_doc(doc_name: str):
 
 @app.delete("/embedded-docs/{doc_name}")
 async def delete_embedded_doc(doc_name: str):
-    """Delete specific embedded document"""
+    """
+    删除特定的嵌入文档
+    
+    功能：从02-embedded-docs目录中删除指定的嵌入文档
+    
+    参数：
+    - doc_name: 要删除的嵌入文档名称
+    
+    返回：
+    - message: 删除操作结果消息
+    """
     try:
         file_path = os.path.join("02-embedded-docs", doc_name)
         if not os.path.exists(file_path):
@@ -752,6 +952,18 @@ async def parse_file(
     file: UploadFile = File(...),
     parsing_option: str = Form("marker"),  # 默认使用marker，向后兼容
 ):
+    """
+    解析上传的文档文件
+    
+    功能：使用指定方法解析文档，提取结构化内容
+    
+    参数：
+    - file: 上传的文件
+    - parsing_option: 解析方法（默认为marker）
+    
+    返回：
+    - 解析后的结构化文档内容
+    """
     try:
         # 创建临时目录，如果不存在
         os.makedirs("temp", exist_ok=True)
@@ -798,6 +1010,22 @@ async def load_file(
     chunking_strategy: str = Form(None),
     chunking_options: str = Form(None),
 ):
+    """
+    加载文档文件并进行初步处理
+    
+    功能：上传并加载文档，支持多种加载策略和分块策略
+    
+    参数：
+    - file: 上传的文件
+    - loading_method: 加载方法
+    - strategy: 加载策略（可选）
+    - chunking_strategy: 分块策略（可选）
+    - chunking_options: 分块选项（JSON格式，可选）
+    
+    返回：
+    - loaded_content: 加载后的文档内容
+    - filepath: 保存的文件路径
+    """
     try:
         # 保存上传的文件
         temp_path = os.path.join("temp", file.filename)
@@ -880,6 +1108,23 @@ async def load_file(
 
 @app.post("/chunk")
 async def chunk_document(data: dict = Body(...)):
+    """
+    对已加载的文档进行分块处理
+    
+    功能：将loaded或parsed文档按指定策略进行分块
+    
+    参数：
+    - doc_id: 文档ID
+    - chunking_option: 分块方法
+    - chunk_size: 分块大小（默认1000）
+    - overlap_size: 重叠大小（默认50）
+    
+    返回：
+    - loaded_content: 分块后的文档内容
+    - filepath: 保存的文件路径
+    - output_file: 输出文件名
+    - chunked_doc_id: 分块文档ID
+    """
     try:
         doc_id = data.get("doc_id")
         chunking_option = data.get("chunking_option")
@@ -991,6 +1236,23 @@ async def evaluate_search(
     top_k: int = Form(10),
     threshold: float = Form(0.7),
 ):
+    """
+    评估搜索效果
+    
+    功能：使用CSV文件中的查询和标签评估搜索系统的准确性
+    
+    参数：
+    - file: 包含查询和标签的CSV文件
+    - collection_id: 要搜索的集合ID
+    - top_k: 每个查询返回的结果数量（默认10）
+    - threshold: 相似度阈值（默认0.7）
+    
+    返回：
+    - results: 每个查询的详细评估结果
+    - average_scores: 平均分数（score_hit和score_find）
+    - total_queries: 有效查询总数
+    - parameters: 评估参数
+    """
     try:
         # 读取CSV文件
         df = pd.read_csv(file.file)
@@ -1135,6 +1397,19 @@ async def evaluate_search(
 
 @app.post("/save-search")
 async def save_search_results(request: Request):
+    """
+    保存搜索结果
+    
+    功能：将搜索结果保存到04-search-results目录
+    
+    参数：
+    - query: 搜索查询
+    - collection_id: 集合ID
+    - results: 搜索结果列表
+    
+    返回：
+    - saved_filepath: 保存的文件路径
+    """
     try:
         data = await request.json()
         query = data.get("query")
@@ -1156,7 +1431,14 @@ async def save_search_results(request: Request):
 
 @app.get("/generation/models")
 async def get_generation_models():
-    """获取可用的生成模型列表"""
+    """
+    获取可用的文本生成模型列表
+    
+    功能：返回系统支持的所有文本生成模型
+    
+    返回：
+    - models: 可用的生成模型列表
+    """
     try:
         generation_service = GenerationService()
         models = generation_service.get_available_models()
@@ -1174,7 +1456,21 @@ async def generate_response(
     search_results: List[Dict] = Body(...),
     api_key: Optional[str] = Body(None),
 ):
-    """生成回答"""
+    """
+    基于搜索结果生成回答
+    
+    功能：使用指定的生成模型，基于搜索结果生成相关回答
+    
+    参数：
+    - query: 用户查询
+    - provider: 生成服务提供商
+    - model_name: 生成模型名称
+    - search_results: 搜索结果列表
+    - api_key: API密钥（可选）
+    
+    返回：
+    - 生成的回答内容
+    """
     try:
         generation_service = GenerationService()
         result = generation_service.generate(
@@ -1192,7 +1488,14 @@ async def generate_response(
 
 @app.get("/search-results")
 async def list_search_results():
-    """获取所有搜索结果文件列表"""
+    """
+    获取所有搜索结果文件列表
+    
+    功能：列出04-search-results目录中的所有搜索结果文件
+    
+    返回：
+    - files: 搜索结果文件列表，包含ID、名称和时间戳
+    """
     try:
         search_results_dir = "04-search-results"
         if not os.path.exists(search_results_dir):
@@ -1223,7 +1526,17 @@ async def list_search_results():
 
 @app.get("/search-results/{file_id}")
 async def get_search_result(file_id: str):
-    """获取特定搜索结果文件的内容"""
+    """
+    获取特定搜索结果文件的内容
+    
+    功能：读取并返回指定搜索结果文件的完整内容
+    
+    参数：
+    - file_id: 搜索结果文件ID
+    
+    返回：
+    - 搜索结果文件的完整内容
+    """
     try:
         file_path = os.path.join("04-search-results", file_id)
         if not os.path.exists(file_path):
@@ -1240,7 +1553,25 @@ async def get_search_result(file_id: str):
 
 @app.post("/search/{provider}")
 async def search_with_path_param(provider: str, body: dict = Body(...)):
-    """通过路径参数执行向量搜索"""
+    """
+    执行向量相似性搜索（通过路径参数）
+    
+    功能：在指定提供商的向量数据库中执行相似性搜索
+    
+    参数（路径）：
+    - provider: 向量数据库提供商名称
+    
+    参数（请求体）：
+    - query: 搜索查询文本
+    - collection_id: 集合ID
+    - top_k: 返回结果数量（默认3）
+    - threshold: 相似度阈值（默认0.5）
+    - word_count_threshold: 最小字数阈值（默认30）
+    - save_results: 是否保存搜索结果（默认false）
+    
+    返回：
+    - results: 搜索结果列表，包含文本内容、元数据和相似度分数
+    """
     try:
         # 从请求体中提取参数
         query = body.get("query", "")
@@ -1303,7 +1634,15 @@ async def search_with_path_param(provider: str, body: dict = Body(...)):
 
 @app.get("/health")
 async def health_check():
-    """健康检查端点"""
+    """
+    系统健康检查
+    
+    功能：检查系统运行状态
+    
+    返回：
+    - status: 系统状态（healthy）
+    - timestamp: 检查时间戳
+    """
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
