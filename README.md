@@ -23,7 +23,7 @@
 ### 🏗️ 技术架构
 
 **后端技术栈：**
-- Python 3.11 + FastAPI
+- Python 3.10 + FastAPI
 - 向量数据库：Milvus、ChromaDB
 - AI模型：OpenAI GPT、DeepSeek、HuggingFace模型
 - 文档解析：marker-pdf、surya-ocr、pypdf、pymupdf等
