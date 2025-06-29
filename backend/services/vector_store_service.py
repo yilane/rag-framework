@@ -179,21 +179,62 @@ class VectorStoreService:
             
         return name
 
-    def _get_milvus_index_type(self, config: VectorDBConfig) -> str:
+    def _is_milvus_lite(self, uri: str) -> bool:
         """
-        从配置对象获取索引类型
+        检测是否为Milvus Lite模式（本地模式）
+        
+        参数:
+            uri: 数据库URI
+            
+        返回:
+            是否为Milvus Lite模式
+        """
+        # Milvus Lite使用本地文件路径或sqlite://格式
+        return uri.endswith('.db') or 'sqlite://' in uri or not uri.startswith('http')
+    
+    def _get_compatible_index_type(self, config: VectorDBConfig) -> str:
+        """
+        获取兼容的索引类型，自动适配Milvus Lite的限制
         
         参数:
             config: 向量数据库配置对象
             
         返回:
-            索引类型
+            兼容的索引类型
         """
-        return config.get_index_type()
+        original_type = config.get_index_type()
+        
+        # 如果是Milvus Lite，确保使用支持的索引类型
+        if self._is_milvus_lite(config.uri):
+            # Milvus Lite支持的索引类型
+            lite_supported = ["FLAT", "HNSW", "AUTOINDEX"]
+            if original_type not in lite_supported:
+                logger.warning(f"Milvus Lite不支持索引类型 {original_type}，已自动降级")
+                # 自动降级策略
+                if original_type in ["IVF_FLAT", "IVF_SQ8"]:
+                    fallback_type = "HNSW"  # 性能更好的选择
+                    logger.info(f"索引类型从 {original_type} 降级到 {fallback_type}")
+                    return fallback_type
+                else:
+                    return "FLAT"  # 最兼容的选择
+        
+        return original_type
+    
+    def _get_milvus_index_type(self, config: VectorDBConfig) -> str:
+        """
+        从配置对象获取兼容的索引类型
+        
+        参数:
+            config: 向量数据库配置对象
+            
+        返回:
+            兼容的索引类型
+        """
+        return self._get_compatible_index_type(config)
     
     def _get_milvus_index_params(self, config: VectorDBConfig) -> Dict[str, Any]:
         """
-        从配置对象获取索引参数
+        从配置对象获取索引参数，自动适配索引类型
         
         参数:
             config: 向量数据库配置对象
@@ -201,7 +242,21 @@ class VectorStoreService:
         返回:
             索引参数字典
         """
-        return config.get_index_params()
+        actual_index_type = self._get_compatible_index_type(config)
+        
+        # 根据实际使用的索引类型获取参数
+        if actual_index_type == "FLAT":
+            return {}
+        elif actual_index_type == "HNSW":
+            return {
+                "M": 16,
+                "efConstruction": 200
+            }
+        elif actual_index_type == "AUTOINDEX":
+            return {}
+        else:
+            # 降级情况，使用安全的默认参数
+            return config.get_index_params()
     
     def index_embeddings(self, embedding_file: str, config: VectorDBConfig) -> Dict[str, Any]:
         """

@@ -182,7 +182,7 @@ const dbConfigs = {
     name: 'Pinecone'
   },
   milvus: {
-    modes: ['flat', 'ivf_flat', 'ivf_sq8', 'hnsw'],
+    modes: ['flat', 'hnsw', 'autoindex'],
     name: 'Milvus'
   },
   qdrant: {

@@ -74,17 +74,24 @@ MILVUS_CONFIG = {
     "uri": "03-vector-store/langchain_milvus.db",
     "index_types": {
         "flat": "FLAT",
-        "ivf_flat": "IVF_FLAT",
-        "ivf_sq8": "IVF_SQ8",
-        "hnsw": "HNSW"
+        "hnsw": "HNSW",
+        "autoindex": "AUTOINDEX",
+        # Milvus Lite不支持的索引类型（保留用于服务器模式）
+        "ivf_flat": "FLAT",    # 降级到FLAT
+        "ivf_sq8": "HNSW"      # 降级到HNSW
     },
     "index_params": {
         "flat": {},
-        "ivf_flat": {"nlist": 1024},
-        "ivf_sq8": {"nlist": 1024},
         "hnsw": {
             "M": 16,
-            "efConstruction": 500
+            "efConstruction": 200
+        },
+        "autoindex": {},
+        # 降级后的参数
+        "ivf_flat": {},        # FLAT不需要参数
+        "ivf_sq8": {           # HNSW参数
+            "M": 16,
+            "efConstruction": 200
         }
     }
 } 

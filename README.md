@@ -2,7 +2,7 @@
 
 一个从零开始实现的 RAG (Retrieval Augmented Generation) 系统，不依赖现有的 RAG 框架。该项目旨在提供一个轻量级、可定制的知识库问答解决方案。
 
-![RAG Frontend](images/RAG1.png)
+![RAG Frontend](images/RAG3.png)
 
 ## 🎯 项目概述
 
