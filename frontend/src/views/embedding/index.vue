@@ -367,7 +367,7 @@ const handleStartEmbedding = async () => {
   }
 
   processingEmbedding.value = true
-  embeddingStatus.value = '正在处理中...'
+  embeddingStatus.value = '正在生成嵌入向量，请耐心等待...'
 
   try {
     // 查找选中的文档对象
@@ -386,13 +386,16 @@ const handleStartEmbedding = async () => {
 
     console.log('嵌入处理参数:', params)
 
+    // 更新状态提示
+    embeddingStatus.value = '正在生成嵌入向量，大文档可能需要数分钟，请耐心等待...'
+
     // 发送嵌入处理请求
     const url = `${apiBaseUrl}/embed`
     const response = await axios.post(url, params, {
       headers: {
         'Content-Type': 'application/json'
       },
-      timeout: 60000
+      timeout: 600000  // 10分钟超时时间，适应大文档嵌入处理
     })
 
     console.log('嵌入处理响应:', response.data)

@@ -1,0 +1,28 @@
+{
+  "web_scraping": {
+    "output_format": "markdown",
+    "include_metadata": true,
+    "include_comments": false,
+    "include_tables": true,
+    "include_links": true,
+    "include_images": false,
+    "timeout": 30,
+    "max_content_length": 20971520,
+    "min_text_length": 100,
+    "target_language": null,
+    "favor_precision": false,
+    "favor_recall": false,
+    "no_fallback": false,
+    "user_agent": "TrafilaturaBot/2.0 (+https://github.com/adbar/trafilatura)"
+  },
+  "batch_processing": {
+    "delay": 1.0,
+    "max_workers": 4,
+    "retry_attempts": 3
+  },
+  "crawling": {
+    "max_seen_urls": 100,
+    "max_known_urls": 10000,
+    "follow_robots_txt": true
+  }
+}

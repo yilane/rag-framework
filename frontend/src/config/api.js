@@ -45,6 +45,20 @@ export const apiUrls = {
     index: `${apiBaseUrl}/index`,
     // 搜索
     search: `${apiBaseUrl}/search`
+  },
+  
+  // 网页抓取相关接口
+  webScraping: {
+    // 抓取单个网页
+    scrape: `${apiBaseUrl}/web-scraping/scrape`,
+    // 批量抓取
+    batchScrape: `${apiBaseUrl}/web-scraping/batch-scrape`,
+    // 发现链接
+    discoverLinks: `${apiBaseUrl}/web-scraping/discover-links`,
+    // 聚焦爬虫
+    focusedCrawl: `${apiBaseUrl}/web-scraping/focused-crawl`,
+    // 服务状态
+    status: `${apiBaseUrl}/web-scraping/status`
   }
 };
 

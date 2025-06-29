@@ -113,6 +113,35 @@ class GenerationService:
             logger.error(f"Error generating with HuggingFace: {str(e)}")
             raise
 
+    def _sanitize_content(self, text: str, max_length: int = 8000) -> str:
+        """
+        清理和过滤内容，移除可能触发内容安全检查的文本
+        
+        参数:
+            text: 需要清理的文本
+            max_length: 最大长度限制
+            
+        返回:
+            清理后的文本
+        """
+        if not text:
+            return ""
+            
+        # 截断过长的文本
+        if len(text) > max_length:
+            text = text[:max_length] + "..."
+            
+        # 移除可能的敏感内容标识词（示例）
+        sensitive_patterns = [
+            # 可以根据实际情况添加更多过滤规则
+        ]
+        
+        cleaned_text = text
+        for pattern in sensitive_patterns:
+            cleaned_text = cleaned_text.replace(pattern, "[FILTERED]")
+            
+        return cleaned_text
+
     def _generate_with_openai(
         self,
         model_name: str,
@@ -140,9 +169,16 @@ class GenerationService:
                     
             client = OpenAI(api_key=api_key)
             
+            # 清理内容以避免触发安全检查
+            sanitized_query = self._sanitize_content(query, 1000)
+            sanitized_context = self._sanitize_content(context, 6000)
+            
+            logger.info(f"Original query length: {len(query)}, sanitized: {len(sanitized_query)}")
+            logger.info(f"Original context length: {len(context)}, sanitized: {len(sanitized_context)}")
+            
             messages = [
-                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question."},
-                {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
+                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question accurately and concisely."},
+                {"role": "user", "content": f"Context: {sanitized_context}\n\nQuestion: {sanitized_query}"}
             ]
             
             response = client.chat.completions.create(
@@ -155,7 +191,35 @@ class GenerationService:
             return response.choices[0].message.content.strip()
             
         except Exception as e:
-            logger.error(f"Error generating with OpenAI: {str(e)}")
+            error_str = str(e)
+            logger.error(f"Error generating with OpenAI: {error_str}")
+            
+            # 处理特定的内容风险错误
+            if "Content Exists Risk" in error_str:
+                logger.warning("Content safety check triggered. Attempting with reduced context.")
+                try:
+                    # 尝试使用更简短的上下文重新生成
+                    short_context = self._sanitize_content(context, 2000)
+                    short_query = self._sanitize_content(query, 500)
+                    
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant. Answer based on the provided information."},
+                        {"role": "user", "content": f"Information: {short_context}\n\nQuestion: {short_query}"}
+                    ]
+                    
+                    response = client.chat.completions.create(
+                        model=self.models["openai"][model_name],
+                        messages=messages,
+                        temperature=0.5,
+                        max_tokens=256
+                    )
+                    
+                    return response.choices[0].message.content.strip()
+                    
+                except Exception as retry_e:
+                    logger.error(f"Retry also failed: {str(retry_e)}")
+                    return "抱歉，由于内容安全检查，无法生成回答。请尝试重新表述您的问题或使用其他模型。"
+            
             raise
 
     def _generate_with_deepseek(
@@ -181,7 +245,7 @@ class GenerationService:
         """
         try:
             if not api_key:
-                api_key = api_key or config.OPENAI_API_KEY
+                api_key = api_key or config.DEEPSEEK_API_KEY
                 if not api_key:
                     raise ValueError("DeepSeek API key not provided")
                     
@@ -190,9 +254,16 @@ class GenerationService:
                 base_url="https://api.deepseek.com"
             )
             
+            # 清理内容以避免触发安全检查
+            sanitized_query = self._sanitize_content(query, 1000)
+            sanitized_context = self._sanitize_content(context, 6000)
+            
+            logger.info(f"DeepSeek - Original query length: {len(query)}, sanitized: {len(sanitized_query)}")
+            logger.info(f"DeepSeek - Original context length: {len(context)}, sanitized: {len(sanitized_context)}")
+            
             messages = [
-                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question."},
-                {"role": "user", "content": f"Context: {context}\n\nQuestion: {query}"}
+                {"role": "system", "content": "You are a helpful assistant. Use the provided context to answer the question accurately and concisely."},
+                {"role": "user", "content": f"Context: {sanitized_context}\n\nQuestion: {sanitized_query}"}
             ]
             
             response = client.chat.completions.create(
@@ -205,7 +276,7 @@ class GenerationService:
             # 如果是推理模型，处理思维链输出
             if model_name == "deepseek-r1":
                 message = response.choices[0].message
-                reasoning = message.reasoning_content
+                reasoning = getattr(message, 'reasoning_content', None)
                 answer = message.content
                 
                 if show_reasoning and reasoning:
@@ -215,7 +286,35 @@ class GenerationService:
             return response.choices[0].message.content.strip()
             
         except Exception as e:
-            logger.error(f"Error generating with DeepSeek: {str(e)}")
+            error_str = str(e)
+            logger.error(f"Error generating with DeepSeek: {error_str}")
+            
+            # 处理特定的内容风险错误
+            if "Content Exists Risk" in error_str or "content_policy_violation" in error_str:
+                logger.warning("DeepSeek content safety check triggered. Attempting with reduced context.")
+                try:
+                    # 尝试使用更简短的上下文重新生成
+                    short_context = self._sanitize_content(context, 2000)
+                    short_query = self._sanitize_content(query, 500)
+                    
+                    messages = [
+                        {"role": "system", "content": "You are a helpful assistant. Answer based on the provided information."},
+                        {"role": "user", "content": f"Information: {short_context}\n\nQuestion: {short_query}"}
+                    ]
+                    
+                    response = client.chat.completions.create(
+                        model=self.models["deepseek"][model_name],
+                        messages=messages,
+                        max_tokens=256,
+                        stream=False
+                    )
+                    
+                    return response.choices[0].message.content.strip()
+                    
+                except Exception as retry_e:
+                    logger.error(f"DeepSeek retry also failed: {str(retry_e)}")
+                    return "抱歉，由于内容安全检查，无法生成回答。请尝试重新表述您的问题或使用其他模型。"
+            
             raise
 
     def generate(

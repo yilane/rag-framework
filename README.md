@@ -11,6 +11,7 @@
 ### ✨ 核心特性
 
 - **🔍 智能文档解析**：支持多种文档格式（PDF、DOCX、TXT等），集成marker-pdf、surya-ocr等先进解析工具
+- **🌐 网页内容抓取**：基于trafilatura的专业级网页内容提取，支持多种输出格式和智能清理
 - **📝 灵活文档分块**：支持多种分块策略，可自定义分块大小
 - **🧠 多模型支持**：支持OpenAI、DeepSeek、HuggingFace等多种AI模型提供商
 - **📊 多向量数据库**：同时支持Milvus和ChromaDB向量数据库
@@ -26,6 +27,7 @@
 - 向量数据库：Milvus、ChromaDB
 - AI模型：OpenAI GPT、DeepSeek、HuggingFace模型
 - 文档解析：marker-pdf、surya-ocr、pypdf、pymupdf等
+- 网页抓取：trafilatura、selectolax、feedparser等
 - 机器学习：PyTorch、sentence-transformers
 
 **前端技术栈：**
@@ -46,7 +48,7 @@ cd rag-framework
 
 #### 1. 环境要求
 
-- **Python**: 3.11+
+- **Python**: 3.10+ (推荐3.10.18)
 - **系统**: Ubuntu 22.04 / Windows 10+ / macOS
 
 #### 2. 安装Miniconda（推荐）
@@ -66,7 +68,7 @@ rm -rf ~/miniconda3/miniconda.sh
 
 ```bash
 # 创建虚拟环境
-conda create -n rag-framework python=3.11
+conda create -n rag-framework python=3.10
 
 # 激活环境
 conda activate rag-framework 
@@ -75,8 +77,14 @@ conda activate rag-framework
 #### 4. 安装依赖
 
 ```bash
+# 安装项目依赖
 pip install -r requirements.txt
+
+# 验证依赖是否正确安装
+pip check
 ```
+
+> **注意**: 如果遇到依赖冲突，这通常不会影响核心功能，可以继续使用。
 
 #### 5. 配置API密钥
 
@@ -177,6 +185,7 @@ rag-framework/
 │   ├── main.py                # FastAPI主入口文件
 │   ├── services/              # 核心服务模块
 │   │   ├── parsing_service.py     # 文档解析服务（marker-pdf, surya-ocr）
+│   │   ├── web_scraping_service.py # 网页抓取服务（trafilatura）
 │   │   ├── loading_service.py     # 文档加载服务
 │   │   ├── chunking_service.py    # 文本分块服务
 │   │   ├── embedding_service.py   # 文本向量化服务
@@ -216,6 +225,7 @@ rag-framework/
 | 服务模块 | 功能描述 | 主要技术 |
 |---------|---------|---------|
 | **parsing_service** | 文档解析与OCR | marker-pdf、surya-ocr、pypdf |
+| **web_scraping_service** | 网页内容抓取 | trafilatura、selectolax、feedparser |
 | **loading_service** | 文档加载与预处理 | 多格式文档读取 |
 | **chunking_service** | 文本智能分块 | 自定义分块策略 |
 | **embedding_service** | 文本向量化 | OpenAI、HuggingFace嵌入模型 |
@@ -225,10 +235,10 @@ rag-framework/
 
 ## 🚀 快速开始
 
-### 1. 上传文档
+### 1. 获取文档
 - 访问前端界面：`http://localhost:5173`
-- 在"文档上传"页面选择PDF/DOCX文件
-- 选择解析方式（marker、traditional等）
+- **上传文档**：在"文档解析"页面选择PDF/DOCX文件并选择解析方式
+- **网页抓取**：在"文档解析"页面输入网页URL，支持智能内容提取
 
 ### 2. 文档处理
 - 在"文档处理"页面进行分块配置
@@ -248,6 +258,14 @@ rag-framework/
 # 上传解析文档
 POST /parse
 Content-Type: multipart/form-data
+
+# 网页内容抓取
+POST /web-scraping/scrape
+Content-Type: application/json
+
+# 批量网页抓取
+POST /web-scraping/batch-scrape
+Content-Type: application/json
 
 # 文档分块
 POST /chunk
@@ -348,6 +366,15 @@ pip install -r requirements.txt --no-cache-dir
 
 # 使用镜像源
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# 检查依赖冲突
+pip check
+```
+
+**4. 网页抓取超时**
+```bash
+# 前端已设置10分钟超时，大文档需要更长时间
+# 如果仍然超时，可以分批处理较小的网页
 ```
 
 ### 前端问题
@@ -440,6 +467,9 @@ free -h
 - [ChromaDB](https://www.trychroma.com/)
 - [marker-pdf](https://github.com/VikParuchuri/marker)
 - [surya-ocr](https://github.com/VikParuchuri/surya)
+- [trafilatura](https://github.com/adbar/trafilatura)
+- [OpenAI](https://openai.com/)
+- [HuggingFace](https://huggingface.co/)
 
 ---
 

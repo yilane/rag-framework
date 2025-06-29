@@ -19,6 +19,7 @@ from services.vector_store_service import VectorStoreService, VectorDBConfig
 from services.search_service import SearchService
 from services.parsing_service import ParsingService
 from services.loading_service import LoadingService
+from services.web_scraping_service import WebScrapingService
 import logging
 from enum import Enum
 from utils.config import VectorDBProvider
@@ -1002,6 +1003,133 @@ async def parse_file(
         raise HTTPException(status_code=500, detail=f"文件解析失败: {str(e)}")
 
 
+@app.post("/parse-webpage")
+async def parse_webpage(data: dict = Body(...)):
+    """
+    解析网页并转换为Markdown格式
+    
+    功能：通过输入网络链接，获取网页数据，解析成Markdown格式并保存到01-parsed-docs目录
+    
+    参数：
+    - url: 网页链接（必需）
+    - config: 可选配置参数
+      - timeout: 请求超时时间（秒，默认30）
+      - clean_html: 是否清理HTML（默认true）
+      - follow_redirects: 是否跟随重定向（默认true）
+      - max_content_length: 最大内容长度（字节，默认10MB）
+    
+    返回：
+    - 解析后的文档数据，格式与parsing_service保持一致
+    - 包含网页元数据、Markdown内容和保存路径
+    """
+    try:
+        url = data.get("url")
+        config = data.get("config", {})
+        
+        if not url:
+            raise HTTPException(status_code=400, detail="Missing required parameter: url")
+        
+        # 验证URL格式
+        from urllib.parse import urlparse
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+        
+        logger.info(f"Starting webpage parsing for: {url}")
+        
+        # 创建网页抓取服务实例
+        web_scraping_service = WebScrapingService(config=config)
+        
+        # 执行网页抓取和解析
+        document_data = web_scraping_service.scrape_webpage(url)
+        
+        # 检查是否有错误
+        if document_data.get("metadata", {}).get("error"):
+            error_msg = document_data["metadata"]["error"]
+            logger.error(f"Webpage parsing error: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"网页解析失败: {error_msg}")
+        
+        logger.info("Webpage parsing completed successfully")
+        
+        return document_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error parsing webpage: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"网页解析失败: {str(e)}")
+
+
+@app.post("/parse-webpages")
+async def parse_multiple_webpages(data: dict = Body(...)):
+    """
+    批量解析多个网页
+    
+    功能：批量处理多个网页链接，转换为Markdown格式
+    
+    参数：
+    - urls: 网页链接列表（必需）
+    - config: 可选配置参数（同parse-webpage）
+    - delay: 请求间隔时间（秒，默认1.0，避免频繁请求）
+    
+    返回：
+    - results: 解析结果列表，每个结果包含URL和解析状态
+    - summary: 批量处理摘要信息
+    """
+    try:
+        urls = data.get("urls", [])
+        config = data.get("config", {})
+        delay = data.get("delay", 1.0)
+        
+        if not urls or not isinstance(urls, list):
+            raise HTTPException(status_code=400, detail="Missing or invalid parameter: urls (should be a list)")
+        
+        if len(urls) > 50:  # 限制批量处理数量
+            raise HTTPException(status_code=400, detail="Too many URLs. Maximum 50 URLs per batch")
+        
+        logger.info(f"Starting batch webpage parsing for {len(urls)} URLs")
+        
+        # 创建网页抓取服务实例
+        web_scraping_service = WebScrapingService(config=config)
+        
+        # 执行批量抓取
+        results = web_scraping_service.batch_scrape(urls, delay=delay)
+        
+        # 统计处理结果
+        success_count = 0
+        error_count = 0
+        
+        for result in results:
+            if result.get("error"):
+                error_count += 1
+            else:
+                success_count += 1
+        
+        summary = {
+            "total_urls": len(urls),
+            "success_count": success_count,
+            "error_count": error_count,
+            "processing_time": f"约{len(urls) * delay:.1f}秒"
+        }
+        
+        logger.info(f"Batch webpage parsing completed: {success_count} success, {error_count} errors")
+        
+        return {
+            "results": results,
+            "summary": summary
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in batch webpage parsing: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"批量网页解析失败: {str(e)}")
+
+
 @app.post("/load")
 async def load_file(
     file: UploadFile = File(...),
@@ -1630,6 +1758,279 @@ async def search_with_path_param(provider: str, body: dict = Body(...)):
     except Exception as e:
         logger.error(f"Error performing search: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ====================== 网页抓取服务 ======================
+
+@app.post("/web-scraping/scrape")
+async def scrape_webpage(data: dict = Body(...)):
+    """
+    抓取单个网页内容
+    
+    功能：使用trafilatura抓取指定URL的网页内容
+    
+    参数：
+    - url: 网页URL
+    - output_format: 输出格式 (markdown, txt, json, xml, html)
+    - include_metadata: 是否包含元数据
+    - include_images: 是否包含图片
+    - favor_precision: 是否优先高精度模式
+    
+    返回：
+    - content: 抓取的内容
+    - metadata: 网页元数据
+    - status: 抓取状态
+    """
+    try:
+        url = data.get("url")
+        output_format = data.get("output_format", "markdown")
+        include_metadata = data.get("include_metadata", True)
+        include_images = data.get("include_images", False)
+        favor_precision = data.get("favor_precision", True)
+        
+        if not url:
+            raise HTTPException(status_code=400, detail="URL是必需的参数")
+        
+        # 创建网页抓取服务实例
+        scraping_service = WebScrapingService()
+        
+        # 执行抓取
+        result = scraping_service.scrape_webpage(
+            url=url,
+            output_format=output_format,
+            include_metadata=include_metadata,
+            include_images=include_images,
+            favor_precision=favor_precision
+        )
+        
+        # 提取内容和元数据，返回简化格式
+        content = ""
+        metadata = {}
+        
+        if result.get("content") and len(result["content"]) > 0:
+            # 获取第一个内容块的内容
+            content = result["content"][0].get("content", "")
+            
+        if result.get("metadata", {}).get("trafilatura_metadata"):
+            metadata = result["metadata"]["trafilatura_metadata"]
+        
+        logger.info(f"Successfully scraped webpage: {url}")
+        return {
+            "content": content,
+            "metadata": metadata,
+            "status": "success",
+            "url": url,
+            "saved_path": result.get("saved_path")
+        }
+        
+    except Exception as e:
+        logger.error(f"Error scraping webpage {url}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"网页抓取失败: {str(e)}")
+
+
+@app.post("/web-scraping/batch-scrape")
+async def batch_scrape_webpages(data: dict = Body(...)):
+    """
+    批量抓取网页内容
+    
+    功能：批量抓取多个URL的网页内容
+    
+    参数：
+    - urls: URL列表
+    - output_format: 输出格式
+    - include_metadata: 是否包含元数据
+    - include_images: 是否包含图片
+    - favor_precision: 是否优先高精度模式
+    
+    返回：
+    - results: 抓取结果列表
+    - summary: 抓取摘要信息
+    """
+    try:
+        urls = data.get("urls", [])
+        output_format = data.get("output_format", "markdown")
+        include_metadata = data.get("include_metadata", True)
+        include_images = data.get("include_images", False)
+        favor_precision = data.get("favor_precision", True)
+        
+        if not urls:
+            raise HTTPException(status_code=400, detail="URLs列表不能为空")
+        
+        # 创建网页抓取服务实例
+        scraping_service = WebScrapingService()
+        
+        # 执行批量抓取
+        results = scraping_service.batch_scrape(
+            urls=urls,
+            output_format=output_format,
+            include_metadata=include_metadata,
+            include_images=include_images,
+            favor_precision=favor_precision
+        )
+        
+        # 创建摘要信息
+        successful_count = len([r for r in results if not r.get('metadata', {}).get('error')])
+        
+        logger.info(f"Successfully batch scraped {successful_count}/{len(urls)} webpages")
+        return {
+            "results": results,
+            "summary": {
+                "total_urls": len(urls),
+                "successful_count": successful_count,
+                "failed_count": len(urls) - successful_count,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in batch scraping: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"批量抓取失败: {str(e)}")
+
+
+@app.post("/web-scraping/discover-links")
+async def discover_links(data: dict = Body(...)):
+    """
+    发现网页中的链接
+    
+    功能：从指定URL发现RSS feeds、sitemaps和其他链接
+    
+    参数：
+    - url: 网页URL
+    - link_type: 链接类型 (feeds, sitemaps, all)
+    
+    返回：
+    - feeds: RSS feeds列表
+    - sitemaps: Sitemap列表
+    - links: 其他链接列表
+    """
+    try:
+        url = data.get("url")
+        link_type = data.get("link_type", "all")
+        
+        if not url:
+            raise HTTPException(status_code=400, detail="URL是必需的参数")
+        
+        # 创建网页抓取服务实例
+        scraping_service = WebScrapingService()
+        
+        if link_type == "feeds":
+            result = {"feeds": scraping_service.discover_feeds(url)}
+        elif link_type == "sitemaps":
+            result = {"sitemaps": scraping_service.discover_sitemap_urls(url)}
+        else:
+            result = {
+                "feeds": scraping_service.discover_feeds(url),
+                "sitemaps": scraping_service.discover_sitemap_urls(url)
+            }
+        
+        logger.info(f"Successfully discovered links from: {url}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error discovering links from {url}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"链接发现失败: {str(e)}")
+
+
+@app.post("/web-scraping/focused-crawl")
+async def focused_crawl(data: dict = Body(...)):
+    """
+    聚焦爬虫
+    
+    功能：从起始URL开始进行聚焦爬虫，按相关性抓取内容
+    
+    参数：
+    - start_url: 起始URL
+    - max_seen_urls: 最大已知URL数量
+    - max_visit_urls: 最大访问URL数量
+    - output_format: 输出格式
+    
+    返回：
+    - results: 爬虫结果
+    - stats: 爬虫统计信息
+    """
+    try:
+        start_url = data.get("start_url")
+        max_seen_urls = data.get("max_seen_urls", 100)
+        max_visit_urls = data.get("max_visit_urls", 10)
+        output_format = data.get("output_format", "markdown")
+        
+        if not start_url:
+            raise HTTPException(status_code=400, detail="起始URL是必需的参数")
+        
+        # 创建网页抓取服务实例
+        scraping_service = WebScrapingService()
+        
+        # 执行聚焦爬虫
+        to_visit, known_urls = scraping_service.focused_crawl(
+            start_url=start_url,
+            max_seen_urls=max_seen_urls,
+            max_known_urls=max_visit_urls
+        )
+        
+        # 构建返回结果
+        result = {
+            "to_visit_urls": list(to_visit),
+            "known_urls": list(known_urls),
+            "stats": {
+                "to_visit_count": len(to_visit),
+                "known_urls_count": len(known_urls),
+                "start_url": start_url,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        logger.info(f"Successfully performed focused crawl from: {start_url}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error in focused crawl from {start_url}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"聚焦爬虫失败: {str(e)}")
+
+
+@app.get("/web-scraping/status")
+async def web_scraping_status():
+    """
+    网页抓取服务状态检查
+    
+    功能：检查网页抓取服务的状态和可用性
+    
+    返回：
+    - status: 服务状态
+    - service_info: 服务信息
+    - available_formats: 可用输出格式
+    """
+    try:
+        # 创建网页抓取服务实例并检查状态
+        scraping_service = WebScrapingService()
+        
+        # 简单状态检查
+        status_info = {
+            "trafilatura_available": True,
+            "version": "2.0",
+            "extraction_features": [
+                "content_extraction",
+                "metadata_extraction", 
+                "feed_discovery",
+                "sitemap_discovery",
+                "focused_crawling",
+                "batch_processing"
+            ]
+        }
+        
+        return {
+            "status": "healthy",
+            "service_info": status_info,
+            "available_formats": ["markdown", "txt", "json", "xml", "html"],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking web scraping service status: {str(e)}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 @app.get("/health")

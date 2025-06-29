@@ -4,55 +4,130 @@
 
     <div style="display: flex; width: 100%; flex: 1; gap: 20px;">
       <!-- 左侧：配置部分 -->
-      <div style="width: 25%; min-width: 300px; max-width: 350px;">
-        <el-card style="width: 100%; height: calc(90vh - 104px); overflow-y: auto; overflow-x: hidden;" shadow="hover">
-          <div style="display: flex; flex-direction: column; gap: 24px;">
+      <div style="width: 25%; min-width: 300px; max-width: 350px; display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- 上传文档模块 -->
+        <el-card style="width: 100%;" shadow="hover">
+          <template #header>
+            <div style="font-size: 14px; font-weight: 500;">上传文档</div>
+          </template>
+          
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- 文件选择 -->
             <div>
-              <!-- 添加文件选择 -->
-              <div>
-                <div style="margin-bottom: 8px; font-size: 14px;">上传文档</div>
-                <el-upload 
-                  class="upload-demo" 
-                  action="#" 
-                  :auto-upload="false" 
-                  :on-change="handleFileChange"
-                  :before-upload="checkFileType"
-                  accept=".pdf,.doc,.docx,.pptx,.ppt,.xlsx,.xls,.html,.htm,.epub,.md,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.webp">
-                  <el-button type="primary">选择文件</el-button>
-                  <template #tip>
-                    <div class="el-upload__tip">
-                      支持多种格式：PDF、Word、图片、Markdown等，智能解析无需选择
-                    </div>
-                  </template>
-                </el-upload>
-                <div style="margin-top: 8px; color: #909399;" v-if="!selectedFile">未选择任何文件</div>
-                <div style="margin-top: 8px; color: #606266;" v-else>已选择: {{ selectedFile.name }}</div>
-              </div>
+              <el-upload 
+                class="upload-demo" 
+                action="#" 
+                :auto-upload="false" 
+                :on-change="handleFileChange"
+                :before-upload="checkFileType"
+                accept=".pdf,.doc,.docx,.pptx,.ppt,.xlsx,.xls,.html,.htm,.epub,.md,.txt,.jpg,.jpeg,.png,.bmp,.tiff,.webp">
+                <el-button type="primary">选择文件</el-button>
+                <template #tip>
+                  <div class="el-upload__tip">
+                    支持多种格式：PDF、Word、图片、Markdown等，智能解析无需选择
+                  </div>
+                </template>
+              </el-upload>
+              <div style="margin-top: 8px; color: #909399;" v-if="!selectedFile">未选择任何文件</div>
+              <div style="margin-top: 8px; color: #606266;" v-else>已选择: {{ selectedFile.name }}</div>
+            </div>
 
+            <!-- 解析按钮 -->
+            <div>
+              <el-button type="primary" style="width: 100%;" @click="handleStartParse" :loading="processingParse"
+                :disabled="!selectedFile">
+                智能解析文档
+              </el-button>
+            </div>
 
-
-              <div style="margin-top: 16px;">
-                <el-button type="primary" style="width: 100%;" @click="handleStartParse" :loading="processingParse"
-                  :disabled="!selectedFile">
-                  智能解析文档
-                </el-button>
-              </div>
-
-              <!-- 状态提示 -->
-              <div v-if="parseStatus" :class="[
-                'parse-status',
-                {
-                  'success': parseStatus.includes('完成'),
-                  'error': parseStatus.includes('错误'),
-                  'info': parseStatus.includes('处理中'),
-                  'warning': parseStatus.includes('警告')
-                }
-              ]">
-                {{ parseStatus }}
-              </div>
+            <!-- 状态提示 -->
+            <div v-if="parseStatus" :class="[
+              'parse-status',
+              {
+                'success': parseStatus.includes('完成'),
+                'error': parseStatus.includes('错误'),
+                'info': parseStatus.includes('处理中'),
+                'warning': parseStatus.includes('警告')
+              }
+            ]">
+              {{ parseStatus }}
             </div>
           </div>
         </el-card>
+
+        <!-- 网络获取模块 -->
+        <el-card style="width: 100%;" shadow="hover">
+          <template #header>
+            <div style="font-size: 14px; font-weight: 500;">网络获取</div>
+          </template>
+          
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- URL输入 -->
+            <div>
+              <el-input
+                v-model="webUrl"
+                placeholder="请输入网页URL (如: https://example.com)"
+                clearable
+                style="width: 100%;"
+                @keyup.enter="handleWebScraping">
+              </el-input>
+            </div>
+
+            <!-- 输出格式选择 -->
+            <div>
+              <div style="margin-bottom: 8px; font-size: 12px; color: #606266;">输出格式</div>
+              <el-select 
+                v-model="webOutputFormat" 
+                placeholder="选择输出格式" 
+                style="width: 100%;" 
+                size="small">
+                <el-option label="Markdown (推荐)" value="markdown" />
+                <el-option label="纯文本" value="txt" />
+                <el-option label="JSON" value="json" />
+                <el-option label="XML" value="xml" />
+                <el-option label="HTML" value="html" />
+              </el-select>
+            </div>
+
+            <!-- 高级选项 -->
+            <div style="display: flex; gap: 16px;">
+              <el-checkbox v-model="webIncludeMetadata" size="small">
+                包含元数据
+              </el-checkbox>
+              <el-checkbox v-model="webIncludeImages" size="small">
+                包含图片
+              </el-checkbox>
+            </div>
+
+            <!-- 抓取按钮 -->
+            <div>
+              <el-button 
+                type="success" 
+                style="width: 100%;" 
+                @click="handleWebScraping" 
+                :loading="processingWebScraping"
+                :disabled="!webUrl.trim()">
+                <span v-if="!processingWebScraping">抓取网页内容</span>
+                <span v-else>正在抓取中...</span>
+              </el-button>
+            </div>
+
+            <!-- 网络状态提示 -->
+            <div v-if="webStatus" :class="[
+              'parse-status',
+              {
+                'success': webStatus.includes('完成'),
+                'error': webStatus.includes('错误'),
+                'info': webStatus.includes('处理中'),
+                'warning': webStatus.includes('警告')
+              }
+            ]">
+              {{ webStatus }}
+            </div>
+          </div>
+        </el-card>
+        
       </div>
 
       <!-- 右侧：文档预览部分 -->
@@ -305,7 +380,7 @@
                   :total="total"
                   :page-size="pageSize"
                   v-model:current-page="currentPage"
-                  small
+                  size="small"
                 />
               </div>
             </div>
@@ -331,7 +406,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { Document, VideoPlay, CircleClose, Close, Download, Search, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
+import { Document, CircleClose, Close, Download, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiUrls, apiBaseUrl } from '@/config/api'
 import { handleError, extractErrorMessage } from '@/utils/errorHandler'
@@ -353,6 +428,14 @@ const loading = ref(false)
 const total = ref(0)
 const files = ref([]) // 存储已解析的文档列表
 const markdownDisplayMode = ref('rendered') // markdown显示模式：rendered（渲染）或 source（源码）
+
+// 网络抓取相关变量
+const webUrl = ref('')
+const webOutputFormat = ref('markdown')
+const webIncludeMetadata = ref(true)
+const webIncludeImages = ref(false)
+const processingWebScraping = ref(false)
+const webStatus = ref('')
 
 // 过滤后的文件列表
 const filteredFiles = computed(() => {
@@ -505,11 +588,11 @@ const handleStartParse = async () => {
       markdownDisplayMode.value = 'rendered'
       
       // 3秒后清除成功状态并刷新文档列表
-      setTimeout(() => {
+      setTimeout(async () => {
         if (parseStatus.value === '解析处理完成') {
           parseStatus.value = ''
           // 刷新文档列表
-          refreshDocumentList()
+          await refreshDocumentList()
         }
       }, 3000)
       
@@ -530,6 +613,162 @@ const handleStartParse = async () => {
     processingParse.value = false
     isLoading.value = false
     handleError(error, { operation: '处理', showMessage: false })
+  }
+}
+
+// 网络抓取处理
+const handleWebScraping = async () => {
+  if (!webUrl.value.trim()) {
+    ElMessage.warning('请输入网页URL')
+    return
+  }
+  
+  // 验证URL格式
+  try {
+    new URL(webUrl.value)
+  } catch (error) {
+    ElMessage.error('请输入有效的URL格式（包含 http:// 或 https://）')
+    return
+  }
+  
+  // 设置状态
+  processingWebScraping.value = true
+  webStatus.value = '正在抓取网页内容...'
+  parsedContent.value = null
+  isLoading.value = true
+  
+  try {
+    // 构建请求参数
+    const requestData = {
+      url: webUrl.value.trim(),
+      output_format: webOutputFormat.value,
+      include_metadata: webIncludeMetadata.value,
+      include_images: webIncludeImages.value,
+      favor_precision: true,  // 默认使用高精度模式
+    }
+    
+    // 发送API请求到后端网页抓取服务
+    const response = await fetch(`${apiBaseUrl}/web-scraping/scrape`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData)
+    })
+    
+    if (!response.ok) {
+      const errorText = await response.text()
+      let errorMessage = `HTTP错误! 状态码: ${response.status}`
+      try {
+        const errorJson = JSON.parse(errorText)
+        if (errorJson.detail || errorJson.message) {
+          errorMessage = errorJson.detail || errorJson.message
+        }
+      } catch (e) {
+        console.error('解析错误响应失败:', e)
+      }
+      throw new Error(errorMessage)
+    }
+    
+    const data = await response.json()
+    console.log('网页抓取响应数据:', data)
+    
+    // 后端返回简化格式：{content: string, metadata: object, status: string}
+    // 需要转换为与文档解析相同的格式
+    
+    const webContent = {
+      metadata: {
+        filename: new URL(webUrl.value).hostname,
+        source: 'web_scraping',
+        url: webUrl.value,
+        title: data.metadata?.title || '',
+        author: data.metadata?.author || '',
+        date: data.metadata?.date || '',
+        language: data.metadata?.language || '',
+        sitename: data.metadata?.sitename || '',
+        total_pages: 1,
+        parsing_method: 'trafilatura',
+        timestamp: new Date().toISOString(),
+        output_format: webOutputFormat.value
+      },
+      content: []
+    }
+    
+    // 处理主要内容
+    if (data.content) {
+      // 确保content是字符串
+      const contentString = typeof data.content === 'string' ? data.content : String(data.content)
+      
+      // 根据输出格式确定内容类型
+      let contentType = 'text'
+      if (webOutputFormat.value === 'markdown') {
+        contentType = 'markdown'
+      } else if (webOutputFormat.value === 'json') {
+        contentType = 'code'
+      } else if (webOutputFormat.value === 'html') {
+        contentType = 'html'
+      }
+      
+      webContent.content.push({
+        type: contentType,
+        content: contentString,
+        page: 1,
+        confidence: 1.0
+      })
+    }
+    
+    // 如果包含元数据，添加元数据信息到内容开头
+    if (webIncludeMetadata.value && data.metadata) {
+      const metadataEntries = Object.entries(data.metadata)
+        .filter(([key, value]) => value && value !== '' && key !== 'url')
+        .map(([key, value]) => `**${key}**: ${value}`)
+      
+      if (metadataEntries.length > 0) {
+        const metadataText = `## 网页元数据\n\n${metadataEntries.join('\n\n')}`
+        
+        webContent.content.unshift({
+          type: 'markdown',
+          content: metadataText,
+          page: 1,
+          confidence: 1.0
+        })
+      }
+    }
+    
+    parsedContent.value = webContent
+    webStatus.value = '网页抓取完成'
+    processingWebScraping.value = false
+    isLoading.value = false
+    
+    // 重置markdown显示模式为渲染模式
+    markdownDisplayMode.value = 'rendered'
+    
+    ElMessage.success('网页内容抓取成功！')
+    
+    // 确保停留在解析结果标签页显示抓取内容
+    activeTab.value = 'preview'
+    
+    // 后台刷新文档列表（不影响当前显示）
+    setTimeout(async () => {
+      await refreshDocumentList()
+    }, 1000)
+    
+    // 3秒后清除成功状态
+    setTimeout(() => {
+      if (webStatus.value === '网页抓取完成') {
+        webStatus.value = ''
+      }
+    }, 3000)
+    
+  } catch (error) {
+    console.error('网页抓取错误:', error)
+    const errorMessage = extractErrorMessage(error, '网页抓取失败')
+    webStatus.value = `错误: ${errorMessage}`
+    processingWebScraping.value = false
+    isLoading.value = false
+    previewError.value = true
+    previewErrorMessage.value = `网页抓取失败: ${errorMessage}`
+    ElMessage.error(`网页抓取失败: ${errorMessage}`)
   }
 }
 
@@ -742,6 +981,12 @@ const formatListContent = (content) => {
 // 渲染markdown内容
 const renderMarkdown = (content) => {
   if (!content) return ''
+  
+  // 确保content是字符串类型
+  if (typeof content !== 'string') {
+    console.warn('renderMarkdown received non-string content:', typeof content, content)
+    content = String(content)
+  }
   
   // 基本的markdown渲染（简单实现）
   let rendered = content
@@ -990,8 +1235,8 @@ onMounted(() => {
 })
 
 // 在解析完成后刷新文档列表
-const refreshDocumentList = () => {
-  fetchParsedDocuments()
+const refreshDocumentList = async () => {
+  await fetchParsedDocuments()
 }
 </script>
 
@@ -1686,6 +1931,32 @@ const refreshDocumentList = () => {
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+
+
+.parse-status.success {
+  background-color: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #389e0d;
+}
+
+.parse-status.error {
+  background-color: #fff2f0;
+  border: 1px solid #ffccc7;
+  color: #cf1322;
+}
+
+.parse-status.info {
+  background-color: #e6f7ff;
+  border: 1px solid #91d5ff;
+  color: #0958d9;
+}
+
+.parse-status.warning {
+  background-color: #fffbe6;
+  border: 1px solid #ffe58f;
+  color: #d46b08;
 }
 </style>
 
