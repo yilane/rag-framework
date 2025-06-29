@@ -218,6 +218,7 @@ import { Document, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { apiBaseUrl } from '@/config/api'
+import { handleError } from '@/utils/errorHandler'
 
 // 状态变量
 const searching = ref(false)
@@ -277,7 +278,7 @@ const fetchProviders = async () => {
     }
   } catch (error) {
     console.error('获取向量数据库列表失败:', error)
-    ElMessage.error('获取向量数据库列表失败')
+    handleError(error, { operation: '获取向量数据库列表' })
   }
 }
 
@@ -290,7 +291,7 @@ const fetchCollections = async (provider) => {
     }
   } catch (error) {
     console.error('获取集合列表失败:', error)
-    ElMessage.error('获取集合列表失败')
+    handleError(error, { operation: '获取集合列表' })
   }
 }
 
@@ -344,8 +345,8 @@ const handleSearch = async () => {
     }
   } catch (error) {
     console.error('搜索错误:', error)
-    status.value = `搜索出错: ${error.message}`
-    ElMessage.error(error.response?.data?.message || error.message || '搜索失败')
+    const errorMessage = handleError(error, { operation: '搜索' })
+    status.value = `搜索出错: ${errorMessage}`
   } finally {
     searching.value = false
   }
@@ -372,8 +373,8 @@ const handleSaveResults = async () => {
     }
   } catch (error) {
     console.error('保存错误:', error)
-    status.value = `保存失败: ${error.message}`
-    ElMessage.error('保存搜索结果失败')
+    const errorMessage = handleError(error, { operation: '保存搜索结果' })
+    status.value = `保存失败: ${errorMessage}`
   }
 }
 

@@ -173,6 +173,7 @@ import { Document, Delete, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { apiBaseUrl } from '@/config/api'
+import { handleError } from '@/utils/errorHandler'
 
 // 数据库和索引模式的配置
 const dbConfigs = {
@@ -458,10 +459,10 @@ const handleStartIndexing = async () => {
     }
 
   } catch (error) {
-    loading.value = false
-    console.error('索引处理失败:', error)
-    indexStatus.value = `错误: 索引处理失败 - ${error.response?.data?.detail || error.message || '未知错误'}`
-    ElMessage.error(`索引处理失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+          loading.value = false
+      console.error('索引处理失败:', error)
+      const errorMessage = handleError(error, { operation: '索引处理' })
+      indexStatus.value = `错误: 索引处理失败 - ${errorMessage}`
   } finally {
     processingIndex.value = false
   }
@@ -495,8 +496,8 @@ const handleDisplayCollection = async () => {
     ElMessage.success('已加载集合信息')
   } catch (error) {
     console.error('获取集合详情失败:', error)
-    indexStatus.value = '错误: ' + (error.response?.data?.message || error.message || '获取集合详情失败')
-    ElMessage.error(error.response?.data?.message || error.message || '获取集合详情失败')
+            const errorMessage = handleError(error, { operation: '获取集合详情' })
+        indexStatus.value = '错误: ' + errorMessage
   } finally {
     
   }
@@ -528,8 +529,8 @@ const handleDeleteCollection = () => {
       ElMessage.success('集合已删除')
     } catch (error) {
       console.error('删除集合失败:', error)
-      indexStatus.value = '错误: ' + (error.response?.data?.message || error.message || '删除集合失败')
-      ElMessage.error(error.response?.data?.message || error.message || '删除集合失败')
+      const errorMessage = handleError(error, { operation: '删除集合' })
+      indexStatus.value = '错误: ' + errorMessage
     } finally {
       
     }

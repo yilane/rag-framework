@@ -309,6 +309,7 @@ import { Document, Search, VideoPlay, ArrowDown, ArrowUp, CircleClose, Close, Se
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { apiUrls, apiBaseUrl } from '@/config/api'
+import { handleError } from '@/utils/errorHandler'
 
 // 状态变量
 const loading = ref(false)
@@ -646,8 +647,8 @@ const handleStartChunk = async () => {
     // progressStatus.value = 'exception'
     // progressText.value = error.response?.data?.detail || error.message || '未知错误'
     
-    chunkStatus.value = `错误: 分块处理失败 - ${error.response?.data?.detail || error.message || '未知错误'}`
-    ElMessage.error(`分块处理失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+    const errorMessage = handleError(error, { operation: '分块处理' })
+    chunkStatus.value = `错误: 分块处理失败 - ${errorMessage}`
     
     logApiCall('POST', `${apiBaseUrl}/chunk`, chunkConfig.value.selectedDoc ? {
       doc_id: chunkConfig.value.selectedDoc,
@@ -754,13 +755,15 @@ const handlePreviewById = async (docId, isRetry = false) => {
       }
     } else if (error.response) {
       // 其他HTTP错误
-      previewErrorMessage.value = `获取预览内容失败 (${error.response.status}): ${error.response.data?.message || '未知错误'}`
+      const errorMessage = handleError(error, { operation: '获取预览内容', showMessage: false })
+      previewErrorMessage.value = `获取预览内容失败 (${error.response.status}): ${errorMessage}`
     } else if (error.request) {
       // 网络错误
       previewErrorMessage.value = '获取预览内容失败: 网络请求未得到响应，请检查API服务是否正常运行'
     } else {
       // 其他错误
-      previewErrorMessage.value = `获取预览内容失败: ${error.message || '未知错误'}`
+      const errorMessage = extractErrorMessage(error, '未知错误')
+      previewErrorMessage.value = `获取预览内容失败: ${errorMessage}`
     }
     
     // 显示错误状态
@@ -787,7 +790,7 @@ const handlePreview = async (row) => {
   } catch (error) {
     console.error('预览文件失败:', error)
     previewError.value = true
-    ElMessage.error(`预览文件失败: ${error.message || '未知错误'}`)
+    handleError(error, { operation: '预览文件' })
   }
 }
 
@@ -824,7 +827,7 @@ const handleDelete = async (row) => {
       ElMessage.success('删除成功')
     } catch (error) {
       console.error('删除文件失败:', error)
-      ElMessage.error('删除文件失败')
+      handleError(error, { operation: '删除文件' })
     }
   }).catch(() => {})
 }

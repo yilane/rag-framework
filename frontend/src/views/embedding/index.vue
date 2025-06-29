@@ -208,6 +208,7 @@ import { Document, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { apiBaseUrl } from '@/config/api' // 引入API基础URL
+import { handleError, extractErrorMessage } from '@/utils/errorHandler'
 
 // 可用文档列表
 const availableDocs = ref([])
@@ -217,11 +218,12 @@ const selectedDoc = ref('')
 // 模型选项映射
 const modelOptionsMap = {
   huggingface: [
+    { label: 'BAAI/bge-small-zh-v1.5', value: 'BAAI/bge-small-zh-v1.5' },
+    { label: 'Qwen/Qwen3-Embedding-0.6B', value: 'Qwen/Qwen3-Embedding-0.6B' },
+    { label: 'intfloat/multilingual-e5-large-instruct', value: 'intfloat/multilingual-e5-large-instruct' },
     { label: 'sentence-transformers/all-mpnet-base-v2', value: 'sentence-transformers/all-mpnet-base-v2' },
     { label: 'all-MiniLM-L6-v2', value: 'all-MiniLM-L6-v2' },
     { label: 'google-bert/bert-base-uncased', value: 'google-bert/bert-base-uncased' },
-    { label: 'BAAI/bge-small-zh-v1.5', value: 'BAAI/bge-small-zh-v1.5' },
-    { label: 'intfloat/multilingual-e5-large-instruct', value: 'intfloat/multilingual-e5-large-instruct' }
   ],
   openai: [
     { label: 'text-embedding-3-large', value: 'text-embedding-3-large' },
@@ -427,8 +429,8 @@ const handleStartEmbedding = async () => {
   } catch (error) {
     console.error('嵌入处理失败:', error)
 
-    embeddingStatus.value = `错误: 嵌入处理失败 - ${error.response?.data?.detail || error.message || '未知错误'}`
-    ElMessage.error(`嵌入处理失败: ${error.response?.data?.detail || error.message || '未知错误'}`)
+    const errorMessage = handleError(error, { operation: '嵌入处理' })
+    embeddingStatus.value = `错误: 嵌入处理失败 - ${errorMessage}`
   } finally {
     processingEmbedding.value = false
   }
@@ -446,7 +448,7 @@ const handleViewEmbedding = async (row) => {
     ElMessage.success(`已加载嵌入: ${row.name}`)
   } catch (error) {
     console.error('加载嵌入失败:', error)
-    ElMessage.error(`加载嵌入失败: ${error.message}`)
+    handleError(error, { operation: '加载嵌入' })
   }
 }
 

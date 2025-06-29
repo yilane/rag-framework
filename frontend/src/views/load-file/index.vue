@@ -325,6 +325,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Document, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { apiUrls } from '@/config/api'
 import { get, upload, del, download } from '@/utils/request'
+import { handleError, extractErrorMessage } from '@/utils/errorHandler'
 
 // 页面状态
 const activeTab = ref('preview')
@@ -462,8 +463,9 @@ const handleLoadFile = async () => {
     
   } catch (error) {
     console.error('加载文档出错:', error)
-    loadingStatus.value = `错误: ${error.message || '文档加载失败'}`
-    ElMessage.error('文档加载失败: ' + (error.message || '未知错误'))
+    const errorMessage = extractErrorMessage(error, '文档加载失败')
+    loadingStatus.value = `错误: ${errorMessage}`
+    handleError(error, { operation: '文档加载' })
     loadedContent.value = null
   } finally {
     loading.value = false

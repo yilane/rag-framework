@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { apiBaseUrl } from '@/config/api'
+import { extractErrorMessage, getErrorStatus, getStatusMessage } from './errorHandler'
 
 // 创建axios实例
 const service = axios.create({
@@ -31,13 +32,22 @@ service.interceptors.response.use(
     
     // 如果返回的状态码不是200，则判断为错误
     if (response.status !== 200) {
+      // 使用新的错误处理工具提取错误信息
+      const errorMessage = extractErrorMessage({
+        response: {
+          status: response.status,
+          data: res
+        }
+      }, '网络错误')
+      
       ElMessage({
-        message: res.message || '网络错误',
+        message: errorMessage,
         type: 'error',
-        duration: 5 * 1000
+        duration: 5 * 1000,
+        showClose: true
       })
       
-      return Promise.reject(new Error(res.message || '网络错误'))
+      return Promise.reject(new Error(errorMessage))
     } else {
       return res
     }
@@ -45,12 +55,30 @@ service.interceptors.response.use(
   error => {
     // 对响应错误做点什么
     console.error('响应错误:', error)
-    const message = error.response?.data?.message || error.message || '网络错误'
+    
+    // 使用新的错误处理工具提取错误信息
+    const errorMessage = extractErrorMessage(error, '网络错误')
+    const status = getErrorStatus(error)
+    
+    // 根据状态码提供更友好的错误信息
+    let displayMessage = errorMessage
+    if (status) {
+      const statusMessage = getStatusMessage(status)
+      // 如果错误信息很通用，使用状态码对应的友好描述
+      if (errorMessage === '网络错误' || errorMessage.includes('Network Error')) {
+        displayMessage = statusMessage
+      } else {
+        displayMessage = `${statusMessage}: ${errorMessage}`
+      }
+    }
+    
     ElMessage({
-      message: message,
+      message: displayMessage,
       type: 'error',
-      duration: 5 * 1000
+      duration: 5 * 1000,
+      showClose: true
     })
+    
     return Promise.reject(error)
   }
 )

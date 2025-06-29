@@ -158,6 +158,7 @@ import { Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import { apiBaseUrl } from '@/config/api'
+import { handleError, extractErrorMessage } from '@/utils/errorHandler'
 
 // 状态变量
 const selectedFile = ref('')
@@ -185,7 +186,7 @@ onMounted(async () => {
     searchFiles.value = filesResponse.data.files
   } catch (error) {
     console.error('获取数据失败:', error)
-    ElMessage.error('获取数据失败')
+    handleError(error, { operation: '获取数据' })
   }
 })
 
@@ -203,7 +204,7 @@ watch(selectedFile, async (newFile) => {
     searchResults.value = response.data.results
   } catch (error) {
     console.error('加载搜索结果失败:', error)
-    ElMessage.error('加载搜索结果失败')
+    handleError(error, { operation: '加载搜索结果' })
   }
 })
 
@@ -237,8 +238,9 @@ const handleGenerate = async () => {
     ElMessage.success('生成完成')
   } catch (error) {
     console.error('生成失败:', error)
-    status.value = `生成失败: ${error.message}`
-    ElMessage.error('生成失败')
+    const errorMessage = extractErrorMessage(error, '生成失败')
+    status.value = `生成失败: ${errorMessage}`
+    handleError(error, { operation: '生成', showMessage: false })
   } finally {
     generating.value = false
   }

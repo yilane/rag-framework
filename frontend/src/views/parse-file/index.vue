@@ -334,6 +334,7 @@ import { ref, onMounted, computed } from 'vue'
 import { Document, VideoPlay, CircleClose, Close, Download, Search, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiUrls, apiBaseUrl } from '@/config/api'
+import { handleError, extractErrorMessage } from '@/utils/errorHandler'
 
 // 状态变量
 const processingParse = ref(false)
@@ -514,17 +515,21 @@ const handleStartParse = async () => {
       
     } catch (error) {
       console.error('解析错误:', error)
-      parseStatus.value = `错误: ${error.message}`
+      const errorMessage = extractErrorMessage(error, '解析失败')
+      parseStatus.value = `错误: ${errorMessage}`
       processingParse.value = false
       isLoading.value = false
       previewError.value = true
-      previewErrorMessage.value = `解析失败: ${error.message}`
+      previewErrorMessage.value = `解析失败: ${errorMessage}`
+      handleError(error, { operation: '解析', showMessage: false })
     }
   } catch (error) {
     console.error('处理错误:', error)
-    parseStatus.value = `错误: ${error.message}`
+    const errorMessage = extractErrorMessage(error, '处理失败')
+    parseStatus.value = `错误: ${errorMessage}`
     processingParse.value = false
     isLoading.value = false
+    handleError(error, { operation: '处理', showMessage: false })
   }
 }
 
@@ -704,7 +709,7 @@ const handleExportResult = () => {
     ElMessage.success('导出成功')
   } catch (error) {
     console.error('导出错误:', error)
-    ElMessage.error(`导出失败: ${error.message}`)
+    handleError(error, { operation: '导出' })
   }
 }
 
@@ -926,8 +931,9 @@ const handleViewDocument = async (row) => {
   } catch (error) {
     console.error('获取文档详情失败:', error)
     previewError.value = true
-    previewErrorMessage.value = `获取文档详情失败: ${error.message}`
-    ElMessage.error(`获取文档详情失败: ${error.message}`)
+    const errorMessage = extractErrorMessage(error, '获取文档详情失败')
+    previewErrorMessage.value = `获取文档详情失败: ${errorMessage}`
+    handleError(error, { operation: '获取文档详情' })
   } finally {
     isLoading.value = false
   }
@@ -970,7 +976,7 @@ const handleDeleteDocument = (row) => {
       ElMessage.success('删除文档成功')
     } catch (error) {
       console.error('删除文档失败:', error)
-      ElMessage.error(`删除文档失败: ${error.message}`)
+      handleError(error, { operation: '删除文档' })
     }
   }).catch(() => {
     // 取消删除，不做任何操作
